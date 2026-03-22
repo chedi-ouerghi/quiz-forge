@@ -3,6 +3,7 @@ import { db } from '../config/database.js';
 import { comments } from '../db/schema/comments.js';
 import { eq, desc } from 'drizzle-orm';
 import crypto from 'crypto';
+import { NotificationService } from '../services/notification.service.js';
 
 // @desc    Créer un commentaire
 // @route   POST /api/comments
@@ -10,7 +11,7 @@ import crypto from 'crypto';
 export const addComment = async (req: Request, res: Response) => {
   try {
     const userId = req.user.id;
-    const { quizId, text, avatar, time } = req.body;
+    const { quizId, text, avatar, time, parentId } = req.body;
 
     if (!text || !quizId) {
       return res.status(400).json({ message: 'Texte et quizId requis' });
@@ -21,6 +22,7 @@ export const addComment = async (req: Request, res: Response) => {
       id,
       quizId,
       userId,
+      parentId, // Optionnel, pour les réponses
       user: req.user.username,
       avatar: avatar || '👤',
       text,
@@ -30,6 +32,20 @@ export const addComment = async (req: Request, res: Response) => {
     const newComment = await db.query.comments.findFirst({
       where: eq(comments.id, id)
     });
+
+    // --- LOGIQUE DE NOTIFICATION ---
+    // 1. Notifier les mentions (@username)
+    await NotificationService.notifyMentions(text, req.user.username, { quizId, commentId: id });
+
+    // 2. Notifier si c'est une réponse
+    if (parentId) {
+      const parentComment = await db.query.comments.findFirst({
+        where: eq(comments.id, parentId)
+      });
+      if (parentComment && parentComment.userId) {
+        await NotificationService.notifyReply(parentComment.userId, req.user.username, { quizId, commentId: id });
+      }
+    }
 
     res.status(201).json(newComment);
   } catch (error: any) {

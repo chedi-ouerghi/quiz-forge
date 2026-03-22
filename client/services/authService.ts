@@ -1,7 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
-
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3001/api' : 'http://localhost:3001/api';
+import { api, API_URL } from './api';
 
 export interface User {
   id: string;
@@ -14,6 +12,7 @@ export interface User {
   country?: string;
   joinedAt?: string;
   quizHistory: any[];
+  streak?: number;
 }
 
 const CURRENT_USER_KEY = '@quiz_current_user';
@@ -31,24 +30,9 @@ export async function removeToken() {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
-export async function authFetch(url: string, options: RequestInit = {}) {
-  const token = await getToken();
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
-  } as HeadersInit;
-  return fetch(url, { ...options, headers });
-}
-
 export async function register(username: string, email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_URL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, email, password }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || 'Error registering');
+  const data: any = await api.post('/auth/register', { username, email, password });
+  
   await setToken(data.token);
   const user = { ...data, joinedAt: data.createdAt || new Date().toISOString(), quizHistory: [] };
   await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
@@ -56,13 +40,8 @@ export async function register(username: string, email: string, password: string
 }
 
 export async function login(email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || 'Error logging in');
+  const data: any = await api.post('/auth/login', { email, password });
+  
   await setToken(data.token);
   const user = { ...data, joinedAt: data.createdAt || new Date().toISOString(), quizHistory: [] };
   await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
@@ -77,15 +56,13 @@ export async function logout(): Promise<void> {
 export async function getCurrentUser(): Promise<User | null> {
   const token = await getToken();
   if (!token) return null;
+  
   try {
-    const res = await authFetch(`${API_URL}/users/profile`);
-    if (!res.ok) return null;
-    const profile = await res.json();
+    const profile: any = await api.get('/users/profile');
     
     let quizzes: any[] = [];
     try {
-       const qres = await fetch(`${API_URL}/quizzes`);
-       if(qres.ok) quizzes = await qres.json();
+       quizzes = await api.get('/quizzes');
     } catch(e) {}
 
     const quizHistory = (profile.results || []).map((r: any) => {
@@ -111,26 +88,20 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 export async function updateUser(updatedUser: Partial<User>): Promise<void> {
-  const res = await authFetch(`${API_URL}/users/profile`, {
-    method: 'PUT',
-    body: JSON.stringify(updatedUser)
-  });
-  if (res.ok) {
-    const data = await res.json();
-    await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ ...data, quizHistory: [] }));
-  }
+  const data = await api.put('/users/profile', updatedUser);
+  await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ ...data as object, quizHistory: [] }));
 }
 
-export function calculateLevel(xp: number): string {
-  if (xp >= 390) return 'Expert';
-  if (xp >= 180) return 'Advanced';
-  if (xp >= 60) return 'Intermediate';
-  return 'Beginner';
+export function calculateLevel(xp: number): number {
+  if (xp >= 3500) return 4;
+  if (xp >= 1500) return 3;
+  if (xp >= 500) return 2;
+  return 1;
 }
 
 export function getNextLevelXp(xp: number): { current: number; next: number; levelName: string } {
-  if (xp >= 390) return { current: 390, next: 9999, levelName: 'Expert' };
-  if (xp >= 180) return { current: 180, next: 390, levelName: 'Advanced' };
-  if (xp >= 60) return { current: 60, next: 180, levelName: 'Intermediate' };
-  return { current: 0, next: 60, levelName: 'Beginner' };
+  if (xp >= 3500) return { current: 3500, next: 9999, levelName: 'Expert' };
+  if (xp >= 1500) return { current: 1500, next: 3500, levelName: 'Advanced' };
+  if (xp >= 500) return { current: 500, next: 1500, levelName: 'Intermediate' };
+  return { current: 0, next: 500, levelName: 'Beginner' };
 }

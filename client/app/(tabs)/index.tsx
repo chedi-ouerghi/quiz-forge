@@ -80,10 +80,15 @@ export default function HomeScreen() {
   const headerTranslateY = useRef(new Animated.Value(-20)).current;
   const statsScaleAnim = useRef(new Animated.Value(0.9)).current;
 
+  const getLevelLabel = (level: number) => {
+    const map: Record<number, string> = { 1: 'Beginner', 2: 'Intermediate', 3: 'Advanced', 4: 'Expert' };
+    return map[level] || 'Beginner';
+  };
+
   // User stats with memoization
   const userStats = useMemo(() => {
     if (!user) return null;
-    const currentLevel = calculateLevel(user.xp);
+    const currentLevelNum = calculateLevel(user.xp);
     const levelInfo = getNextLevelXp(user.xp);
     const progress = levelInfo.next === 9999 ? 1 : (user.xp - levelInfo.current) / (levelInfo.next - levelInfo.current);
     const bestScore = user.quizHistory.length > 0
@@ -94,7 +99,7 @@ export default function HomeScreen() {
       : null;
 
     return {
-      currentLevel,
+      currentLevel: currentLevelNum,
       levelInfo,
       progress,
       bestScore,
@@ -160,23 +165,45 @@ export default function HomeScreen() {
     [quizzes, selectedDifficulty]
   );
 
-  const isLocked = useCallback((difficulty: Difficulty) => {
+  const isDifficultyLocked = useCallback((difficulty: Difficulty) => {
     const xpRequired = LEVEL_THRESHOLDS[difficulty];
-    return user?.xp ? user.xp < xpRequired : true;
+    return (user?.xp || 0) < xpRequired;
   }, [user?.xp]);
+
+  const isQuizLocked = useCallback((quiz: Quiz) => {
+    // 1. Global difficulty lock
+    const diffLocked = isDifficultyLocked(quiz.difficulty);
+    if (diffLocked) return true;
+
+    // 2. Sequential order lock
+    // Order 1 is always the entry point for its difficulty
+    if (quiz.order <= 1) return false;
+
+    // To unlock quiz order N, user must have completed quiz order N-1 with 60%+ score
+    const prevQuiz = quizzes.find(q => q.order === quiz.order - 1);
+    if (!prevQuiz) return false;
+
+    const isPrevDone = user?.quizHistory && user.quizHistory.some(h => 
+      h.quizId === prevQuiz.id && (h.score / h.maxScore) >= 0.6
+    );
+
+    return !isPrevDone;
+  }, [user?.quizHistory, isDifficultyLocked, quizzes]);
 
   if (!user || !userStats) return null;
 
+  const getLevelColor = (level: number) => {
+     const label = getLevelLabel(level).toLowerCase() as Difficulty;
+     return DIFFICULTY_CONFIG[label]?.color || Colors.primary;
+  };
+
   const levelColor = getLevelColor(userStats.currentLevel);
-  const difficultyConfig = DIFFICULTY_CONFIG[selectedDifficulty];
 
   return (
     <View style={styles.screen}>
       <LinearGradient
-        colors={['#0D0821', '#080818', '#030014']}
+        colors={['#0D1117', '#161B22'] as const}
         style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
       />
 
       {/* Animated decorative elements */}
@@ -246,12 +273,11 @@ export default function HomeScreen() {
                   <Badge
                     label={`Level ${userStats.currentLevel}`}
                     color={levelColor}
-                    variant="glow"
                   />
                   <Text style={[styles.levelTitle, { color: levelColor }]}>
-                    {userStats.currentLevel <= 10 ? 'Rising Star' :
-                      userStats.currentLevel <= 25 ? 'Quiz Master' :
-                        userStats.currentLevel <= 50 ? 'Knowledge Guru' : 'Legendary Scholar'}
+                    {userStats.currentLevel <= 1 ? 'Rising Star' :
+                      userStats.currentLevel <= 2 ? 'Quiz Master' :
+                        userStats.currentLevel <= 3 ? 'Knowledge Guru' : 'Legendary Scholar'}
                   </Text>
                 </View>
                 <ProgressBar
@@ -259,7 +285,6 @@ export default function HomeScreen() {
                   showPercent
                   height={8}
                   colors={[levelColor, Colors.primaryLight]}
-                  animated
                 />
                 <View style={styles.xpInfo}>
                   <Text style={styles.xpProgress}>
@@ -292,32 +317,14 @@ export default function HomeScreen() {
         {/* Animated Stats Row */}
         <Animated.View style={[styles.statsRow, { transform: [{ scale: statsScaleAnim }] }]}>
           {[
-            {
-              icon: 'check-circle',
-              label: 'Completed',
-              value: user.quizzesCompleted,
-              color: Colors.accentGreen,
-              gradient: ['#10B98120', '#10B98110'],
-            },
-            {
-              icon: 'star',
-              label: 'Best Score',
-              value: userStats.bestScore ? `${userStats.bestScore}%` : '—',
-              color: '#F59E0B',
-              gradient: ['#F59E0B20', '#F59E0B10'],
-            },
-            {
-              icon: 'local-fire-department',
-              label: 'Streak',
-              value: `${userStats.streak} days`,
-              color: '#EF4444',
-              gradient: ['#EF444420', '#EF444410'],
-            },
-          ].map((stat, index) => (
-            <GlassCard
-              key={stat.label}
-              style={styles.statCard}
-              variant="elevated"
+            { label: 'Streak', value: `${userStats.streak}d`, icon: 'local-fire-department', color: '#F59E0B', gradient: ['#F59E0B20', '#F59E0B10'] as const },
+            { label: 'Completed', value: user.quizzesCompleted, icon: 'check-circle', color: '#10B981', gradient: ['#10B98120', '#10B98110'] as const },
+            { label: 'Best Score', value: userStats.bestScore ? `${userStats.bestScore}%` : 'N/A', icon: 'stars', color: '#06B6D4', gradient: ['#06B6D420', '#06B6D410'] as const },
+          ].map((stat, i) => (
+            <GlassCard 
+              key={i} 
+              style={styles.statCard} 
+              variant="default"
             >
               <LinearGradient
                 colors={stat.gradient}
@@ -347,7 +354,7 @@ export default function HomeScreen() {
           {DIFFICULTY_TABS.map((diff, index) => {
             const config = DIFFICULTY_CONFIG[diff];
             const isSelected = selectedDifficulty === diff;
-            const locked = isLocked(diff);
+            const locked = isDifficultyLocked(diff);
             const xpRequired = LEVEL_THRESHOLDS[diff];
 
             return (
@@ -377,11 +384,6 @@ export default function HomeScreen() {
                   </>
                 ) : (
                   <>
-                    <MaterialIcons
-                      name={config.icon as any}
-                      size={14}
-                      color={isSelected ? config.color : Colors.textMuted}
-                    />
                     <Text
                       style={[
                         styles.filterTabText,
@@ -426,9 +428,8 @@ export default function HomeScreen() {
               >
                 <QuizCard
                   quiz={quiz}
-                  isLocked={isLocked(quiz.difficulty)}
+                  isLocked={isQuizLocked(quiz)}
                   onPress={(q) => router.push(`/quiz/${q.id}`)}
-                  showProgress
                 />
               </Animated.View>
             ))}

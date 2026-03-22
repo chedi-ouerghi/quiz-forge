@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { db } from '../config/database.js';
 import { quizzes } from '../db/schema/quizzes.js';
 import { questions } from '../db/schema/questions.js';
@@ -6,6 +6,51 @@ import { users } from '../db/schema/users.js';
 import { quizResults, userAnswers } from '../db/schema/results.js';
 import { eq, desc, and } from 'drizzle-orm';
 import crypto from 'crypto';
+import { NotificationService } from '../services/notification.service.js';
+
+// @desc    Créer un quiz (Admin)
+// @route   POST /api/quizzes
+// @access  Private/Admin
+export const createQuiz = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { title, description, difficulty, category, xpReward, icon, color, questions: quizQuestions } = req.body;
+
+    const quizId = crypto.randomUUID();
+    
+    await db.transaction(async (tx) => {
+      await tx.insert(quizzes).values({
+        id: quizId,
+        title,
+        description,
+        difficulty,
+        category,
+        icon: icon || 'quiz',
+        color: color || '#4F46E5',
+        xpReward: parseInt(xpReward) || 50,
+      } as any);
+
+      if (quizQuestions && quizQuestions.length > 0) {
+        const questionsToInsert = quizQuestions.map((q: any, index: number) => ({
+          id: crypto.randomUUID(),
+          quizId,
+          question: q.question,
+          options: q.options,
+          correctIndex: q.correctIndex,
+          explanation: q.explanation,
+          order: index,
+        }));
+        await tx.insert(questions).values(questionsToInsert);
+      }
+    });
+
+    // --- NOTIFIER TOUS LES UTILISATEURS ---
+    await NotificationService.notifyNewQuiz(title, quizId);
+
+    res.status(201).json({ success: true, quizId });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // @desc    Liste des quiz
 // @route   GET /api/quizzes

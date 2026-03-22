@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { authFetch } from '@/services/authService';
+import { api } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
-
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3001/api' : 'http://localhost:3001/api';
 
 export interface Comment {
   id: string;
@@ -16,6 +14,7 @@ export interface Comment {
   text: string;
   time: string;
   createdAt?: string;
+  parentId?: string | null;
 }
 
 interface CommentSectionProps {
@@ -28,6 +27,7 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
   const [newComment, setNewComment] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCommentTxt, setEditCommentTxt] = useState('');
+  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { user } = useAuth();
@@ -38,11 +38,8 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
 
   const fetchComments = async () => {
     try {
-      const res = await fetch(`${API_URL}/comments/${quizId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setComments(data);
-      }
+      const data: any = await api.get(`/comments/${quizId}`);
+      setComments(data);
     } catch (e) {
       console.log('Error fetching comments', e);
     } finally {
@@ -57,34 +54,44 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
       return;
     }
     const txt = newComment.trim();
+    const parentId = replyingTo?.id || null;
     setNewComment('');
+    setReplyingTo(null);
     
     // Optimistic UI
     const optimisticId = Date.now().toString();
-    setComments([{
+    const optimisticComment: Comment = {
       id: optimisticId,
       user: currentUsername,
       userId: user.id,
       text: txt,
       avatar: user.avatar || '👤',
-      time: 'Just now'
-    }, ...comments]);
+      time: 'Just now',
+      parentId: parentId,
+      createdAt: new Date().toISOString()
+    };
+    setComments([optimisticComment, ...comments]);
 
     try {
-      const res = await authFetch(`${API_URL}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quizId, text: txt, avatar: user.avatar || '👤' })
+      await api.post('/comments', { 
+        quizId, 
+        text: txt, 
+        avatar: user.avatar || '👤',
+        parentId: parentId
       });
-      if (res.ok) {
-        fetchComments();
-      } else {
-        Alert.alert('Error', 'Failed to add comment');
-        fetchComments(); // revert optimistic
-      }
+      fetchComments();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to add comment');
+      fetchComments(); // revert optimistic
+    }
+  };
+
+  const deleteApiCall = async (id: string) => {
+    try {
+      await api.delete(`/comments/${id}`);
+      fetchComments();
     } catch (e) {
       Alert.alert('Error', 'Network error');
-      fetchComments(); // revert optimistic
     }
   };
 
@@ -102,36 +109,15 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
     ]);
   };
 
-  const deleteApiCall = async (id: string) => {
-    try {
-      const res = await authFetch(`${API_URL}/comments/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchComments();
-      } else {
-        Alert.alert('Error', 'Failed to delete');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Network error');
-    }
-  };
-
   const handleEditSave = async (id: string) => {
     if (!editCommentTxt.trim()) {
       setEditingId(null);
       return;
     }
     try {
-      const res = await authFetch(`${API_URL}/comments/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: editCommentTxt.trim() })
-      });
-      if (res.ok) {
-        setEditingId(null);
-        fetchComments();
-      } else {
-        Alert.alert('Error', 'Failed to update');
-      }
+      await api.put(`/comments/${id}`, { text: editCommentTxt.trim() });
+      setEditingId(null);
+      fetchComments();
     } catch (e) {
       Alert.alert('Error', 'Network error');
     }
@@ -140,7 +126,112 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
   const formatDate = (dateStr?: string, timeStr?: string) => {
     if (!dateStr) return timeStr || 'Just now';
     const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? 'Just now' : d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    if (isNaN(d.getTime())) return 'Just now';
+    
+    const now = new Date();
+    const diff = (now.getTime() - d.getTime()) / 1000;
+    
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return d.toLocaleDateString();
+  };
+
+  // Group comments by parent
+  const { rootComments, repliesMap } = useMemo(() => {
+    const root: Comment[] = [];
+    const replies: Record<string, Comment[]> = {};
+    
+    // Sort by date ASC so oldest replies are first in their group
+    const sorted = [...comments].sort((a, b) => 
+      new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    );
+
+    sorted.forEach(c => {
+      if (!c.parentId) {
+        root.push(c);
+      } else {
+        if (!replies[c.parentId]) replies[c.parentId] = [];
+        replies[c.parentId].push(c);
+      }
+    });
+
+    // Root comments should be DESC (newest on top)
+    root.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    return { rootComments: root, repliesMap: replies };
+  }, [comments]);
+
+  const renderComment = (comment: Comment, isReply = false) => {
+    const isMine = user && (comment.userId === user.id || comment.user === currentUsername);
+    const isEditing = editingId === comment.id;
+    const replies = repliesMap[comment.id] || [];
+
+    return (
+      <View key={comment.id}>
+        <GlassCard 
+          style={[styles.commentCard, isReply ? styles.replyCard : {}]} 
+          variant={isReply ? 'default' : 'strong'}
+        >
+          <View style={styles.commentHeader}>
+            <View style={[styles.avatar, isReply && styles.avatarSmall]}>
+              <Text style={[styles.avatarEmoji, isReply && { fontSize: 16 }]}>{comment.avatar}</Text>
+            </View>
+            <View style={styles.commentMeta}>
+              <Text style={styles.username}>{comment.user}</Text>
+              <Text style={styles.time}>{formatDate(comment.createdAt, comment.time)}</Text>
+            </View>
+            
+            <View style={styles.actions}>
+              {!isEditing && !isReply && (
+                <Pressable onPress={() => { setReplyingTo(comment); setNewComment(`@${comment.user} `); }} style={styles.iconBtn}>
+                  <MaterialIcons name="reply" size={16} color={Colors.primaryLight} />
+                </Pressable>
+              )}
+              {isMine && !isEditing && (
+                <>
+                  <Pressable onPress={() => { setEditingId(comment.id); setEditCommentTxt(comment.text); }} style={styles.iconBtn}>
+                    <MaterialIcons name="edit" size={16} color={Colors.textSubtle} />
+                  </Pressable>
+                  <Pressable onPress={() => handleDelete(comment.id)} style={styles.iconBtn}>
+                    <MaterialIcons name="delete-outline" size={16} color={Colors.error} />
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+
+          {isEditing ? (
+            <View style={styles.editSection}>
+              <TextInput
+                style={styles.editInput}
+                value={editCommentTxt}
+                onChangeText={setEditCommentTxt}
+                multiline
+                autoFocus
+              />
+              <View style={styles.editActions}>
+                <Pressable onPress={() => setEditingId(null)} style={styles.editBtnCancel}>
+                  <Text style={styles.editBtnTextCancel}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={() => handleEditSave(comment.id)} style={styles.editBtnSave}>
+                  <Text style={styles.editBtnTextSave}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.commentText}>{comment.text}</Text>
+          )}
+        </GlassCard>
+        
+        {/* Render child replies */}
+        {replies.length > 0 && (
+          <View style={styles.repliesContainer}>
+            {replies.map(r => renderComment(r, true))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -150,12 +241,20 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
         {' '}Community Discussion ({comments.length})
       </Text>
 
-      {/* Input */}
+      {/* Input Section */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        {replyingTo && (
+           <View style={styles.replyingToBar}>
+              <Text style={styles.replyingToText}>Replying to <Text style={{fontWeight: 'bold'}}>{replyingTo.user}</Text></Text>
+              <Pressable onPress={() => {setReplyingTo(null); setNewComment(''); }}>
+                 <MaterialIcons name="close" size={16} color={Colors.textSubtle} />
+              </Pressable>
+           </View>
+        )}
         <View style={styles.inputCard}>
           <TextInput
             style={styles.input}
-            placeholder="Share your thoughts..."
+            placeholder={replyingTo ? "Write a reply..." : "Share your thoughts..."}
             placeholderTextColor={Colors.textSubtle}
             value={newComment}
             onChangeText={setNewComment}
@@ -173,8 +272,8 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
               ]}
               disabled={!newComment.trim() || !user}
             >
-              <MaterialIcons name="send" size={18} color="white" />
-              <Text style={styles.sendText}>Post</Text>
+              <MaterialIcons name={replyingTo ? "reply" : "send"} size={18} color="white" />
+              <Text style={styles.sendText}>{replyingTo ? "Reply" : "Post"}</Text>
             </Pressable>
           </View>
         </View>
@@ -188,56 +287,7 @@ export function CommentSection({ quizId, currentUsername }: CommentSectionProps)
       )}
 
       {/* Comments list */}
-      {!loading && comments.map((comment) => {
-        const isMine = user && (comment.userId === user.id || comment.user === currentUsername);
-        const isEditing = editingId === comment.id;
-
-        return (
-          <GlassCard key={comment.id} style={styles.commentCard} variant="default">
-            <View style={styles.commentHeader}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarEmoji}>{comment.avatar}</Text>
-              </View>
-              <View style={styles.commentMeta}>
-                <Text style={styles.username}>{comment.user}</Text>
-                <Text style={styles.time}>{formatDate(comment.createdAt, comment.time)}</Text>
-              </View>
-              
-              {isMine && !isEditing && (
-                <View style={styles.actions}>
-                  <Pressable onPress={() => { setEditingId(comment.id); setEditCommentTxt(comment.text); }} style={styles.iconBtn}>
-                    <MaterialIcons name="edit" size={16} color={Colors.textSubtle} />
-                  </Pressable>
-                  <Pressable onPress={() => handleDelete(comment.id)} style={styles.iconBtn}>
-                    <MaterialIcons name="delete-outline" size={16} color={Colors.error} />
-                  </Pressable>
-                </View>
-              )}
-            </View>
-
-            {isEditing ? (
-              <View style={styles.editSection}>
-                <TextInput
-                  style={styles.editInput}
-                  value={editCommentTxt}
-                  onChangeText={setEditCommentTxt}
-                  multiline
-                />
-                <View style={styles.editActions}>
-                  <Pressable onPress={() => setEditingId(null)} style={styles.editBtnCancel}>
-                    <Text style={styles.editBtnTextCancel}>Cancel</Text>
-                  </Pressable>
-                  <Pressable onPress={() => handleEditSave(comment.id)} style={styles.editBtnSave}>
-                    <Text style={styles.editBtnTextSave}>Save</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <Text style={styles.commentText}>{comment.text}</Text>
-            )}
-          </GlassCard>
-        );
-      })}
+      {!loading && rootComments.map(c => renderComment(c))}
 
       {!loading && comments.length === 0 && (
         <View style={styles.empty}>
@@ -262,6 +312,23 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  replyingToBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(124,58,237,0.1)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(124,58,237,0.2)',
+  },
+  replyingToText: {
+    color: Colors.primaryLight,
+    fontSize: FontSize.xs,
   },
   inputCard: {
     backgroundColor: 'rgba(255,255,255,0.03)',
@@ -316,6 +383,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.02)',
     borderColor: 'rgba(255,255,255,0.06)',
   },
+  replyCard: {
+    backgroundColor: 'rgba(255,255,255,0.01)',
+    marginLeft: 0,
+    borderColor: 'rgba(255,255,255,0.03)',
+  },
+  repliesContainer: {
+    marginLeft: Spacing.lg,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(124,58,237,0.2)',
+    paddingLeft: Spacing.sm,
+  },
   commentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -331,6 +409,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(124,58,237,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   avatarEmoji: {
     fontSize: 20,

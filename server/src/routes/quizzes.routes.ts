@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getQuizzes, getQuizDetail, submitQuiz, getQuizResults } from '../controllers/quizzes.controller.js';
+import { getQuizzes, getQuizDetail, submitQuiz, getQuizResults, createQuiz } from '../controllers/quizzes.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 
 const router = Router();

@@ -16,9 +16,21 @@ async function startServer() {
       process.exit(1);
     }
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       logger.info(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
     });
+
+    // Graceful Shutdown
+    const gracefullyShutdown = () => {
+      logger.info('Shutting down server...');
+      server.close(() => {
+        logger.info('Server closed. Success.');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', gracefullyShutdown);
+    process.on('SIGINT', gracefullyShutdown);
 
   } catch (error: any) {
     logger.error(`Error starting server: ${error.message}`);

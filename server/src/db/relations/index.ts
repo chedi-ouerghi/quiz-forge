@@ -6,10 +6,13 @@ import { comments } from '../schema/comments.js';
 import { quizResults, userAnswers } from '../schema/results.js';
 import { badges, userBadges } from '../schema/badges.js';
 
+import { notifications } from '../schema/notifications.js';
+
 export const usersRelations = relations(users, ({ many }) => ({
   results: many(quizResults),
   comments: many(comments),
   badges: many(userBadges),
+  notifications: many(notifications),
 }));
 
 export const quizzesRelations = relations(quizzes, ({ many }) => ({
@@ -72,5 +75,12 @@ export const userBadgesRelations = relations(userBadges, ({ one }) => ({
   badge: one(badges, {
     fields: [userBadges.badgeId],
     references: [badges.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
   }),
 }));

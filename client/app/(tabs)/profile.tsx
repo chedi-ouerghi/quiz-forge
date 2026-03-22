@@ -108,13 +108,18 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }, []);
 
-  const joinDate = new Date(user.joinedAt).toLocaleDateString('en-US', {
+  const joinDate = user.joinedAt ? new Date(user.joinedAt).toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
-  });
+  }) : 'N/A';
 
-  const getLevelBadgeLetter = (level: string) => {
-    const map: Record<string, string> = { 'Beginner': 'B', 'Intermediate': 'I', 'Advanced': 'A', 'Expert': 'E' };
+  const getLevelLabel = (level: number) => {
+    const map: Record<number, string> = { 1: 'Beginner', 2: 'Intermediate', 3: 'Advanced', 4: 'Expert' };
+    return map[level] || 'Beginner';
+  };
+
+  const getLevelBadgeLetter = (level: number) => {
+    const map: Record<number, string> = { 1: 'B', 2: 'I', 3: 'A', 4: 'E' };
     return map[level] || 'L';
   };
 
@@ -165,10 +170,9 @@ export default function ProfileScreen() {
             <Text style={styles.heroEmail}>{user.email}</Text>
 
             <Badge
-              label={userStats.currentLevel}
-              color={DIFFICULTY_CONFIG[userStats.currentLevel.toLowerCase() as Difficulty]?.color ?? Colors.primary}
+              label={getLevelLabel(userStats.currentLevel)}
+              color={DIFFICULTY_CONFIG[getLevelLabel(userStats.currentLevel).toLowerCase() as Difficulty]?.color ?? Colors.primary}
               style={styles.levelBadge}
-              variant="glow"
             />
 
             <View style={styles.progressSection}>
@@ -200,9 +204,9 @@ export default function ProfileScreen() {
             { icon: 'bolt', label: 'Total XP', value: user.xp.toLocaleString(), color: '#F59E0B', gradient: ['#F59E0B20', '#F59E0B10'] as const },
             { icon: 'quiz', label: 'Quizzes', value: user.quizzesCompleted.toString(), color: Colors.accentGreen, gradient: ['#10B98120', '#10B98110'] as const },
             { icon: 'target', label: 'Accuracy', value: `${userStats.accuracy}%`, color: Colors.neonCyan, gradient: ['#06B6D420', '#06B6D410'] as const },
-            { icon: 'emoji-events', label: 'Rank', value: userStats.currentLevel, color: Colors.neonPurple, gradient: ['#A855F720', '#A855F710'] as const },
+            { icon: 'emoji-events', label: 'Rank', value: getLevelLabel(userStats.currentLevel), color: Colors.neonPurple, gradient: ['#A855F720', '#A855F710'] as const },
           ].map((stat) => (
-            <GlassCard key={stat.label} style={styles.statCard} variant="elevated">
+            <GlassCard key={stat.label} style={styles.statCard} variant="default">
               <LinearGradient colors={stat.gradient} style={styles.statIconWrapper}>
                 <MaterialIcons name={stat.icon as any} size={22} color={stat.color} />
               </LinearGradient>
@@ -218,7 +222,7 @@ export default function ProfileScreen() {
             <MaterialIcons name="history" size={20} color={Colors.primaryLight} />
             <Text style={styles.sectionTitle}>Recent Quizzes</Text>
             {user.quizHistory.length > 5 && (
-              <Pressable onPress={() => router.push('/history')}>
+              <Pressable onPress={() => router.push('/history' as any)}>
                 <Text style={styles.seeAllText}>See all</Text>
               </Pressable>
             )}
@@ -347,7 +351,6 @@ export default function ProfileScreen() {
             variant="danger"
             fullWidth
             size="lg"
-            icon="logout"
           />
         </Animated.View>
       </ScrollView>

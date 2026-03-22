@@ -13,6 +13,7 @@ import usersRoutes from './routes/users.routes.js';
 import quizzesRoutes from './routes/quizzes.routes.js';
 import leaderboardRoutes from './routes/leaderboard.routes.js';
 import commentsRoutes from './routes/comments.routes.js';
+import notificationsRoutes from './routes/notifications.routes.js';
 
 const app: Application = express();
 
@@ -37,6 +38,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/quizzes', quizzesRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/comments', commentsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
