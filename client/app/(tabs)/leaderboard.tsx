@@ -2,9 +2,11 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView, Animated,
+  ScrollView,
+  Animated,
   Dimensions,
-  RefreshControl
+  RefreshControl,
+  Pressable
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -14,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { LeaderboardItem } from '@/components/feature/LeaderboardItem';
+import { FullLeaderboardModal } from '@/components/feature/FullLeaderboardModal';
 import { getGlobalLeaderboard } from '@/services/leaderboardService';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 
@@ -39,11 +42,13 @@ export default function LeaderboardScreen() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const podiumAnim = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Entrance animations
@@ -92,7 +97,7 @@ export default function LeaderboardScreen() {
   }, [loadLeaderboard]);
 
   const topThree = useMemo(() => leaderboard.slice(0, 3), [leaderboard]);
-  const rest = useMemo(() => leaderboard.slice(3), [leaderboard]);
+  const rest = useMemo(() => leaderboard.slice(3, 10), [leaderboard]);
 
   const userRankData = useMemo(() => {
     if (!user) return null;
@@ -103,7 +108,7 @@ export default function LeaderboardScreen() {
       xp: user.xp,
       level: user.level,
       quizzes: user.quizzesCompleted,
-      country: '🌍',
+      country: user.country || '🌍',
     };
   }, [user]);
 
@@ -119,19 +124,29 @@ export default function LeaderboardScreen() {
     outputRange: [0.8, 1],
   });
 
+  const headerScale = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [1, 0.95],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={styles.screen}>
       <LinearGradient
-        colors={['#0D0821', '#080818'] as const}
+        colors={['#0D0821', '#080818']}
         style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
       <Animated.View style={[styles.orb, { opacity: fadeAnim }]} />
       <Animated.View style={[styles.orb2, { opacity: fadeAnim }]} />
+      <Animated.View style={[styles.orb3, { opacity: fadeAnim }]} />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: 32 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 16, paddingBottom: 32 },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -141,29 +156,30 @@ export default function LeaderboardScreen() {
             colors={[Colors.primaryLight]}
           />
         }
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
       >
-        {/* Animated Header */}
+        {/* HEADER */}
         <Animated.View
-          style={[
-            styles.header,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }
-          ]}
+          style={{
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }, { scale: headerScale }],
+          }}
         >
-          <LinearGradient
-            colors={['rgba(245,158,11,0.2)', 'rgba(220,38,38,0.1)'] as const}
-            style={styles.trophyContainer}
-          >
+          <LinearGradient style={styles.trophyContainer} colors={['#F59E0B', '#D97706'] as const}>
             <Image
               source={require('@/assets/images/trophy.png')}
               style={styles.trophyImage}
               contentFit="contain"
             />
           </LinearGradient>
+
           <Text style={styles.title}>🏆 Global Leaderboard</Text>
           <Text style={styles.subtitle}>Top minds around the world</Text>
+
           <View style={styles.statsBadge}>
             <MaterialIcons name="people" size={14} color={Colors.primaryLight} />
             <Text style={styles.statsBadgeText}>
@@ -172,116 +188,103 @@ export default function LeaderboardScreen() {
           </View>
         </Animated.View>
 
-        {/* Podium Section */}
+        {/* PODIUM */}
         {topThree.length >= 3 && !loading && (
           <Animated.View
-            style={[
-              styles.podiumWrapper,
-              {
-                opacity: podiumAnim,
-                transform: [{ scale: podiumScale }],
-              }
-            ]}
+            style={{
+              opacity: podiumAnim,
+              transform: [{ scale: podiumScale }],
+            }}
           >
             <View style={styles.podium}>
-              {/* 2nd place */}
+              {/* 2nd Place */}
               <View style={styles.podiumItem}>
-                <LinearGradient
-                  colors={['rgba(192,192,192,0.2)', 'rgba(192,192,192,0.05)'] as const}
-                  style={[styles.podiumAvatar, styles.silver]}
-                >
+                <View style={[styles.podiumAvatar, styles.silver]}>
                   <Text style={styles.podiumEmoji}>{topThree[1]?.avatar || '👤'}</Text>
-                </LinearGradient>
+                </View>
                 <LinearGradient
-                  colors={['rgba(192,192,192,0.15)', 'rgba(192,192,192,0.05)'] as const}
+                  colors={['#C0C0C0', '#A8A8A8']}
                   style={[styles.podiumBar, styles.silverBar]}
                 >
                   <Text style={styles.podiumRank}>2</Text>
+                  <Text style={styles.podiumName} numberOfLines={1}>
+                    {topThree[1]?.username}
+                  </Text>
+                  <Text style={styles.podiumXp}>{topThree[1]?.xp.toLocaleString()} XP</Text>
                 </LinearGradient>
-                <Text style={styles.podiumName} numberOfLines={1}>
-                  {topThree[1]?.username || 'Player'}
-                </Text>
-                <Text style={styles.podiumXp}>
-                  {topThree[1]?.xp?.toLocaleString() || '0'} XP
-                </Text>
               </View>
 
-              {/* 1st place */}
+              {/* 1st Place */}
               <View style={[styles.podiumItem, styles.firstPlace]}>
                 <View style={styles.crownContainer}>
                   <Text style={styles.crown}>👑</Text>
                 </View>
+                <View style={[styles.podiumAvatar, styles.gold]}>
+                  <Text style={styles.podiumEmoji}>{topThree[0]?.avatar || '🏆'}</Text>
+                </View>
                 <LinearGradient
-                  colors={['rgba(255,215,0,0.25)', 'rgba(255,215,0,0.1)'] as const}
-                  style={[styles.podiumAvatar, styles.gold]}
-                >
-                  <Text style={styles.podiumEmoji}>{topThree[0]?.avatar || '👑'}</Text>
-                </LinearGradient>
-                <LinearGradient
-                  colors={['rgba(255,215,0,0.2)', 'rgba(255,215,0,0.05)'] as const}
+                  colors={['#FFD700', '#FFA500']}
                   style={[styles.podiumBar, styles.goldBar]}
                 >
                   <Text style={styles.podiumRank}>1</Text>
+                  <Text style={[styles.podiumName, styles.firstName]} numberOfLines={1}>
+                    {topThree[0]?.username}
+                  </Text>
+                  <Text style={[styles.podiumXp, styles.goldXp]}>
+                    {topThree[0]?.xp.toLocaleString()} XP
+                  </Text>
                 </LinearGradient>
-                <Text style={[styles.podiumName, styles.firstName]} numberOfLines={1}>
-                  {topThree[0]?.username || 'Champion'}
-                </Text>
-                <Text style={[styles.podiumXp, styles.goldXp]}>
-                  {topThree[0]?.xp?.toLocaleString() || '0'} XP
-                </Text>
               </View>
 
-              {/* 3rd place */}
+              {/* 3rd Place */}
               <View style={styles.podiumItem}>
-                <LinearGradient
-                  colors={['rgba(205,127,50,0.2)', 'rgba(205,127,50,0.05)'] as const}
-                  style={[styles.podiumAvatar, styles.bronze]}
-                >
+                <View style={[styles.podiumAvatar, styles.bronze]}>
                   <Text style={styles.podiumEmoji}>{topThree[2]?.avatar || '👤'}</Text>
-                </LinearGradient>
+                </View>
                 <LinearGradient
-                  colors={['rgba(205,127,50,0.15)', 'rgba(205,127,50,0.05)'] as const}
+                  colors={['#CD7F32', '#B8693E']}
                   style={[styles.podiumBar, styles.bronzeBar]}
                 >
                   <Text style={styles.podiumRank}>3</Text>
+                  <Text style={styles.podiumName} numberOfLines={1}>
+                    {topThree[2]?.username}
+                  </Text>
+                  <Text style={styles.podiumXp}>{topThree[2]?.xp.toLocaleString()} XP</Text>
                 </LinearGradient>
-                <Text style={styles.podiumName} numberOfLines={1}>
-                  {topThree[2]?.username || 'Player'}
-                </Text>
-                <Text style={styles.podiumXp}>
-                  {topThree[2]?.xp?.toLocaleString() || '0'} XP
-                </Text>
               </View>
             </View>
 
-            {/* Podium stats */}
+            {/* Podium Stats */}
             <View style={styles.podiumStats}>
               <View style={styles.podiumStatItem}>
-                <MaterialIcons name="stars" size={14} color="#FFD700" />
-                <Text style={styles.podiumStatText}>
-                  Champion: {topThree[0]?.xp?.toLocaleString()} XP
-                </Text>
+                <MaterialIcons name="emoji-events" size={14} color="#FFD700" />
+                <Text style={styles.podiumStatText}>Top performers</Text>
               </View>
             </View>
           </Animated.View>
         )}
 
-        {/* Your rank card */}
+        {/* YOUR RANK */}
         {userRankData && userRank && (
           <Animated.View style={{ opacity: fadeAnim }}>
-            <GlassCard variant="accent" style={styles.yourRankCard}>
+            <GlassCard style={styles.yourRankCard}>
+              <LinearGradient
+                colors={['rgba(245,158,11,0.1)', 'rgba(217,119,6,0.05)']}
+                style={StyleSheet.absoluteFill}
+              />
               <View style={styles.yourRankHeader}>
                 <LinearGradient
-                  colors={[Colors.primaryLight, Colors.primary]} as const
+                  colors={['#F59E0B', '#D97706']}
                   style={styles.yourRankIcon}
                 >
-                  <MaterialIcons name="person-pin" size={14} color="#FFFFFF" />
+                  <MaterialIcons name="person-pin" size={14} color="#000" />
                 </LinearGradient>
                 <Text style={styles.yourRankLabel}>Your Ranking</Text>
                 <View style={styles.yourRankBadge}>
                   <Text style={styles.yourRankNumber}>#{userRank}</Text>
                 </View>
               </View>
+
               <LeaderboardItem
                 rank={userRank}
                 username={userRankData.username}
@@ -289,51 +292,47 @@ export default function LeaderboardScreen() {
                 xp={userRankData.xp}
                 level={userRankData.level}
                 quizzes={userRankData.quizzes}
-                country={userRankData.country}
+                country={userRankData.country || '🌍'}
                 isCurrentUser
               />
-              {userRank <= 10 && userRank > 3 && (
-                <View style={styles.topTenBadge}>
-                  <MaterialIcons name="trending-up" size={12} color={Colors.accentGreen} />
-                  <Text style={styles.topTenText}>Top 10 Player!</Text>
-                </View>
-              )}
             </GlassCard>
           </Animated.View>
         )}
 
-        {/* Full Rankings */}
+        {/* GLOBAL RANKINGS CLICKABLE */}
         <Animated.View style={{ opacity: fadeAnim }}>
-          <GlassCard noPadding style={styles.rankingsCard}>
-            <LinearGradient
-              colors={['rgba(255,255,255,0.05)', 'transparent'] as const}
-              style={styles.rankingsHeader}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+          <GlassCard style={styles.rankingsCard}>
+            <Pressable
+              onPress={() => setIsModalVisible(true)}
+              style={({ pressed }) => [
+                styles.rankingsHeader,
+                pressed && styles.rankingsHeaderPressed,
+              ]}
             >
               <View style={styles.rankingsTitleContainer}>
-                <MaterialIcons name="format-list-numbered" size={18} color={Colors.primaryLight} />
+                <LinearGradient
+                  colors={['#F59E0B', '#D97706']}
+                  style={styles.rankingsIcon}
+                >
+                  <MaterialIcons name="format-list-numbered" size={16} color="#000" />
+                </LinearGradient>
                 <Text style={styles.rankingsTitle}>Global Rankings</Text>
               </View>
+
               <View style={styles.rankingsMeta}>
                 <MaterialIcons name="groups" size={14} color={Colors.textSubtle} />
                 <Text style={styles.rankingsMetaText}>
                   {leaderboard.length.toLocaleString()} players
                 </Text>
+                <MaterialIcons name="chevron-right" size={18} color={Colors.primaryLight} />
               </View>
-            </LinearGradient>
+            </Pressable>
 
             {loading ? (
-              <View style={styles.loadingContainer}>
+              <Animated.View style={styles.loadingContainer}>
                 <MaterialIcons name="autorenew" size={32} color={Colors.primaryLight} />
                 <Text style={styles.loadingText}>Loading rankings...</Text>
-              </View>
-            ) : rest.length === 0 && topThree.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <MaterialIcons name="emoji-people" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyTitle}>No players yet</Text>
-                <Text style={styles.emptyText}>Be the first to appear on the leaderboard!</Text>
-              </View>
+              </Animated.View>
             ) : (
               <View>
                 {rest.map((player, index) => (
@@ -341,10 +340,10 @@ export default function LeaderboardScreen() {
                     key={player.id || index}
                     rank={index + 4}
                     username={player.username}
-                    avatar={player.avatar || '👤'}
-                    xp={player.xp || 0}
-                    level={player.level || 1}
-                    quizzes={player.quizzesCompleted || 0}
+                    avatar={player.avatar}
+                    xp={player.xp}
+                    level={player.level}
+                    quizzes={player.quizzesCompleted}
                     country={player.country || '🌍'}
                     isCurrentUser={player.id === user?.id}
                   />
@@ -354,13 +353,16 @@ export default function LeaderboardScreen() {
           </GlassCard>
         </Animated.View>
 
-        {/* Motivational footer */}
+        {/* MOTIVATIONAL FOOTER */}
         {!loading && leaderboard.length > 0 && (
-          <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
+          <Animated.View style={{ opacity: fadeAnim }}>
             <GlassCard style={styles.footerCard}>
-              <Text style={styles.footerText}>
-                🎯 Keep practicing to climb the ranks!
-              </Text>
+              <LinearGradient
+                colors={['rgba(16,185,129,0.1)', 'rgba(5,150,105,0.05)']}
+                style={StyleSheet.absoluteFill}
+              />
+              <MaterialIcons name="emoji-events" size={24} color="#10B981" />
+              <Text style={styles.footerText}>🎯 Keep practicing to climb the ranks!</Text>
               <Text style={styles.footerSubtext}>
                 Complete quizzes and maintain streaks to earn more XP
               </Text>
@@ -368,6 +370,13 @@ export default function LeaderboardScreen() {
           </Animated.View>
         )}
       </ScrollView>
+
+      <FullLeaderboardModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+        data={leaderboard}
+        currentUserId={user?.id}
+      />
     </View>
   );
 }
@@ -395,6 +404,15 @@ const styles = StyleSheet.create({
     borderRadius: 125,
     backgroundColor: 'rgba(124,58,237,0.08)',
   },
+  orb3: {
+    position: 'absolute',
+    top: '30%',
+    right: '20%',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(16,185,129,0.05)',
+  },
   content: {
     paddingHorizontal: Spacing.lg,
     gap: Spacing.lg,
@@ -411,6 +429,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.xs,
+    alignSelf: 'center',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   trophyImage: {
     width: 48,
@@ -436,6 +460,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.full,
     marginTop: Spacing.xs,
+    alignSelf: 'center',
   },
   statsBadgeText: {
     fontSize: FontSize.xs,
@@ -480,9 +505,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 6,
     borderWidth: 2,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   gold: {
     borderColor: '#FFD700',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
   },
   silver: {
     borderColor: '#C0C0C0',
@@ -563,11 +593,14 @@ const styles = StyleSheet.create({
   yourRankCard: {
     gap: Spacing.md,
     position: 'relative',
+    overflow: 'hidden',
   },
   yourRankHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+    padding: Spacing.md,
+    paddingBottom: 0,
   },
   yourRankIcon: {
     width: 24,
@@ -620,10 +653,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
+  rankingsHeaderPressed: {
+    opacity: 0.7,
+  },
   rankingsTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
+  },
+  rankingsIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rankingsTitle: {
     fontSize: FontSize.md,
@@ -669,6 +712,8 @@ const styles = StyleSheet.create({
   footerCard: {
     padding: Spacing.md,
     alignItems: 'center',
+    gap: Spacing.sm,
+    overflow: 'hidden',
   },
   footerText: {
     fontSize: FontSize.sm,

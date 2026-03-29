@@ -16,4 +16,5 @@ export const users = mysqlTable('users', {
   resetTokenExpiry: timestamp('reset_token_expiry'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+  lastProfileUpdate: timestamp('last_profile_update'),
 });

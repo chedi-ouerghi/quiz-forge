@@ -15,11 +15,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAlert } from '@/template';
 import { calculateLevel, getNextLevelXp } from '@/services/authService';
 import { DIFFICULTY_CONFIG, Difficulty } from '@/constants/quizData';
-import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { Colors, BorderRadius, FontSize, FontWeight, Spacing, Shadow } from '@/constants/theme';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Badge } from '@/components/ui/Badge';
 import { NeonButton } from '@/components/ui/NeonButton';
+import { EditProfileModal } from '@/components/feature/EditProfileModal';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 
 // Animation constants
@@ -31,7 +32,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -69,7 +71,7 @@ export default function ProfileScreen() {
     const accuracy = user.quizHistory.length > 0
       ? Math.round(user.quizHistory.reduce((acc, h) => acc + (h.score / h.maxScore) * 100, 0) / user.quizHistory.length)
       : 0;
-    
+
     return { currentLevel, levelInfo, progress, accuracy };
   }, [user.xp, user.quizHistory]);
 
@@ -82,7 +84,7 @@ export default function ProfileScreen() {
     { emoji: '🎯', label: 'Perfect', unlocked: userStats.accuracy === 100, color: '#06B6D4' },
   ], [user.quizzesCompleted, user.xp, userStats.accuracy]);
 
-  const recentHistory = useMemo(() => 
+  const recentHistory = useMemo(() =>
     user.quizHistory.slice(0, 5),
     [user.quizHistory]
   );
@@ -150,9 +152,10 @@ export default function ProfileScreen() {
             colors={['rgba(124,58,237,0.4)', 'rgba(37,99,235,0.25)', 'rgba(6,182,212,0.15)'] as const}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
+            style={[styles.heroCard, Shadow.purple]}
           >
             <View style={styles.avatarWrapper}>
+              <View style={styles.avatarGlow} />
               <LinearGradient
                 colors={['#7C3AED', '#2563EB'] as const}
                 style={styles.avatarGradient}
@@ -169,11 +172,20 @@ export default function ProfileScreen() {
             <Text style={styles.heroUsername}>{user.username}</Text>
             <Text style={styles.heroEmail}>{user.email}</Text>
 
-            <Badge
-              label={getLevelLabel(userStats.currentLevel)}
-              color={DIFFICULTY_CONFIG[getLevelLabel(userStats.currentLevel).toLowerCase() as Difficulty]?.color ?? Colors.primary}
-              style={styles.levelBadge}
-            />
+            <View style={styles.heroActions}>
+              <Badge
+                label={getLevelLabel(userStats.currentLevel)}
+                color={DIFFICULTY_CONFIG[getLevelLabel(userStats.currentLevel).toLowerCase() as Difficulty]?.color ?? Colors.primary}
+                style={styles.levelBadge}
+              />
+              <Pressable
+                style={styles.editProfileBtn}
+                onPress={() => setIsEditModalVisible(true)}
+              >
+                <MaterialIcons name="edit" size={16} color={Colors.textMuted} />
+                <Text style={styles.editProfileText}>Edit</Text>
+              </Pressable>
+            </View>
 
             <View style={styles.progressSection}>
               <View style={styles.progressHeader}>
@@ -184,10 +196,10 @@ export default function ProfileScreen() {
                   {user.xp.toLocaleString()} / {userStats.levelInfo.next === 9999 ? '∞' : userStats.levelInfo.next.toLocaleString()} XP
                 </Text>
               </View>
-              <ProgressBar 
-                progress={userStats.progress} 
-                height={8} 
-                colors={['#A855F7', '#3B82F6', '#06B6D4'] as const} 
+              <ProgressBar
+                progress={userStats.progress}
+                height={8}
+                colors={['#A855F7', '#3B82F6', '#06B6D4'] as const}
               />
             </View>
 
@@ -264,10 +276,10 @@ export default function ProfileScreen() {
                     </View>
                     <View style={styles.historyRight}>
                       <Text style={[styles.historyScore, { color }]}>{pct}%</Text>
-                      <Badge 
-                        label={item.difficulty} 
-                        color={DIFFICULTY_CONFIG[item.difficulty as Difficulty]?.color ?? Colors.primary} 
-                        size="sm" 
+                      <Badge
+                        label={item.difficulty}
+                        color={DIFFICULTY_CONFIG[item.difficulty as Difficulty]?.color ?? Colors.primary}
+                        size="sm"
                       />
                     </View>
                   </GlassCard>
@@ -283,16 +295,16 @@ export default function ProfileScreen() {
             <MaterialIcons name="military-tech" size={20} color={Colors.neonPurple} />
             <Text style={styles.sectionTitle}>Achievements</Text>
           </View>
-          
-          <ScrollView 
-            horizontal 
+
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.achievementsScroll}
           >
             {achievements.map((achievement) => (
               <LinearGradient
                 key={achievement.label}
-                colors={achievement.unlocked 
+                colors={achievement.unlocked
                   ? [achievement.color + '40', achievement.color + '20'] as const
                   : ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)'] as const}
                 style={[styles.achievement, !achievement.unlocked && styles.achievementLocked]}
@@ -318,7 +330,7 @@ export default function ProfileScreen() {
             <MaterialIcons name="settings" size={20} color={Colors.textMuted} />
             <Text style={styles.sectionTitle}>Settings</Text>
           </View>
-          
+
           <GlassCard noPadding style={styles.settingsCard}>
             {[
               { icon: 'notifications-none', label: 'Notifications', route: '/settings/notifications' },
@@ -354,6 +366,12 @@ export default function ProfileScreen() {
           />
         </Animated.View>
       </ScrollView>
+
+      <EditProfileModal
+        visible={isEditModalVisible}
+        onClose={() => setIsEditModalVisible(false)}
+        user={user}
+      />
     </View>
   );
 }
@@ -409,35 +427,75 @@ const styles = StyleSheet.create({
   avatarEmoji: {
     fontSize: 44,
   },
+  avatarGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 60,
+    backgroundColor: 'rgba(124,58,237,0.3)',
+    transform: [{ scale: 1.1 }],
+    ...Shadow.purple,
+  },
   levelBadgeAbs: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    bottom: -4,
+    right: -4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#7C3AED',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.bg,
+    borderColor: Colors.bgSecondary,
+    ...Shadow.purple,
   },
   levelBadgeText: {
-    fontSize: 12,
+    fontSize: 14,
     color: 'white',
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.extrabold,
   },
   heroUsername: {
-    fontSize: FontSize.xxl,
+    fontSize: FontSize.xxxl,
     color: Colors.text,
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.extrabold,
+    textShadowColor: 'rgba(124,58,237,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   heroEmail: {
     fontSize: FontSize.sm,
     color: Colors.textSubtle,
   },
-  levelBadge: {
+  heroActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     marginVertical: Spacing.xs,
+  },
+  levelBadge: {
+    marginVertical: 0,
+  },
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    ...Shadow.soft,
+  },
+  editProfileText: {
+    color: Colors.text,
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   progressSection: {
     width: '100%',
@@ -478,6 +536,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingVertical: Spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...Shadow.soft,
   },
   statIconWrapper: {
     width: 44,
@@ -542,6 +604,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   historyLeft: {
     flexDirection: 'row',
@@ -598,10 +663,14 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.lg,
     padding: Spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.2)',
+    borderColor: 'rgba(124,58,237,0.4)',
+    backgroundColor: 'rgba(124,58,237,0.05)',
+    ...Shadow.purple,
   },
   achievementLocked: {
     borderColor: Colors.glassBorder,
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
   },
   achievementEmoji: {
     fontSize: 32,

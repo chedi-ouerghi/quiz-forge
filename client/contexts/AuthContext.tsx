@@ -8,7 +8,7 @@ interface AuthContextType {
   signUp: (username: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  updateUserData: (updatedUser: User) => Promise<void>;
+  updateUserData: (updatedUser: Partial<User>) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,8 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(currentUser);
   };
 
-  const updateUserData = async (updatedUser: User) => {
-    await updateUser(updatedUser);
+  const updateUserData = async (updates: Partial<User>) => {
+    const updatedUser = await updateUser(updates);
     setUser(updatedUser);
   };
 

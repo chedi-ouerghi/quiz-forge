@@ -45,8 +45,24 @@ export const updateProfile = async (req: Request, res: Response) => {
     const userId = req.user.id;
     const { username, avatar, country } = req.body;
 
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    if (user.lastProfileUpdate) {
+      const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
+      const timeSinceLastUpdate = new Date().getTime() - new Date(user.lastProfileUpdate).getTime();
+      
+      if (timeSinceLastUpdate < thirtyDaysInMs) {
+        const remainingDays = Math.ceil((thirtyDaysInMs - timeSinceLastUpdate) / (1000 * 60 * 60 * 24));
+        return res.status(403).json({ message: `Veuillez attendre encore ${remainingDays} jours avant de modifier votre profil.` });
+      }
+    }
+
     // Check username taken if changed
-    if (username && username !== req.user.username) {
+    if (username && username !== user.username) {
       const existingUser = await db.query.users.findFirst({
         where: eq(users.username, username)
       });
@@ -57,9 +73,10 @@ export const updateProfile = async (req: Request, res: Response) => {
 
     await db.update(users)
       .set({
-        username: username || req.user.username,
-        avatar: avatar || req.user.avatar,
-        country: country || req.user.country,
+        username: username || user.username,
+        avatar: avatar || user.avatar,
+        country: country || user.country,
+        lastProfileUpdate: new Date()
       })
       .where(eq(users.id, userId));
 

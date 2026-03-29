@@ -5,11 +5,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 
 interface LeaderboardItemProps {
-  rank: number;
+  rank: number | string;
   username: string;
   avatar: string;
   xp: number;
-  level: string;
+  level: string | number;
   quizzes: number;
   country: string;
   isCurrentUser?: boolean;
@@ -31,7 +31,8 @@ export function LeaderboardItem({
   country,
   isCurrentUser = false,
 }: LeaderboardItemProps) {
-  const isTop3 = rank <= 3;
+  const numericRank = Number(rank);
+  const isTop3 = numericRank > 0 && numericRank <= 3;
 
   return (
     <View style={[styles.container, isCurrentUser && styles.currentUser]}>
@@ -46,7 +47,7 @@ export function LeaderboardItem({
       <View style={styles.rankContainer}>
         {isTop3 ? (
           <LinearGradient
-            colors={RANK_COLORS[rank] as [string, string]}
+            colors={RANK_COLORS[numericRank] as [string, string]}
             style={styles.rankBadge}
           >
             <Text style={styles.rankNumber}>{rank}</Text>

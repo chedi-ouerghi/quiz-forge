@@ -13,6 +13,7 @@ export interface User {
   joinedAt?: string;
   quizHistory: any[];
   streak?: number;
+  lastProfileUpdate?: string;
 }
 
 const CURRENT_USER_KEY = '@quiz_current_user';
@@ -87,9 +88,11 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 }
 
-export async function updateUser(updatedUser: Partial<User>): Promise<void> {
+export async function updateUser(updatedUser: Partial<User>): Promise<User> {
   const data = await api.put('/users/profile', updatedUser);
-  await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ ...data as object, quizHistory: [] }));
+  const user = { ...(data as any), quizHistory: [] } as User;
+  await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  return user;
 }
 
 export function calculateLevel(xp: number): number {
