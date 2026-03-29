@@ -61,7 +61,7 @@ export async function generateQuizList(count: number = 2) {
 /**
  * ❓ Génération des questions (Utilise maintenant Groq)
  */
-export async function generateQuestionsWithGemini(category: string, difficulty: string, count: number = 5) {
+export async function generateQuestionsWithGroq(category: string, difficulty: string, count: number = 5) {
   if (!client) throw new Error("GROQ_API_KEY not configured");
 
   const prompt = `Génère ${count} questions de quiz techniques sur ${category} pour un niveau ${difficulty}.
