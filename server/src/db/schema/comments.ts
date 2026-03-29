@@ -1,6 +1,6 @@
 import { mysqlTable, varchar, text, timestamp, AnyMySqlColumn } from 'drizzle-orm/mysql-core';
-import { quizzes } from './quizzes';
-import { users } from './users';
+import { quizzes } from './quizzes.js';
+import { users } from './users.js';
 
 export const comments = mysqlTable('comments', {
   id: varchar('id', { length: 36 }).primaryKey(),

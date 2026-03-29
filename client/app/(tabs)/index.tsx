@@ -25,6 +25,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Badge } from '@/components/ui/Badge';
 import { QuizCard } from '@/components/feature/QuizCard';
+import { NeonButton } from '@/components/ui/NeonButton';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -338,9 +339,24 @@ export default function HomeScreen() {
           ))}
         </Animated.View>
 
+        {/* Instant Challenge Launcher */}
+        <Animated.View style={[styles.sectionHeader, { opacity: fadeAnim, marginVertical: Spacing.sm }]}>
+          <Text style={styles.sectionTitle}>⚡ Instant Challenge</Text>
+          <Text style={styles.sectionSub}>A random selection of 10 IT questions from our library.</Text>
+        </Animated.View>
+        
+        <GlassCard variant="default" style={{ marginBottom: Spacing.md }}>
+          <NeonButton 
+            title="Start Random Quiz" 
+            variant="primary"
+            onPress={() => router.push('/quiz/dynamic')}
+            fullWidth
+          />
+        </GlassCard>
+
         {/* Section header with animation */}
         <Animated.View style={[styles.sectionHeader, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>📚 Quizzes</Text>
+          <Text style={styles.sectionTitle}>📚 Classic Quizzes</Text>
           <Text style={styles.sectionSub}>Choose your challenge and prove your knowledge</Text>
         </Animated.View>
 

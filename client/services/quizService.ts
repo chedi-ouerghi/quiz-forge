@@ -56,3 +56,21 @@ export function calculateScore(
 export async function submitQuizApi(quizId: string, answers: { questionId: string, selectedOption: number }[], timeSpent: number) {
   return await api.post(`/quizzes/${quizId}/submit`, { answers, timeSpent });
 }
+
+export async function generateDynamicQuiz(category?: string) {
+  try {
+    return await api.post('/play/generate', { category });
+  } catch (error) {
+    console.error("Erreur generateDynamicQuiz:", error);
+    return null;
+  }
+}
+
+export async function submitDynamicQuiz(sessionId: string, answers: { questionId: string | number, selectedOption: number }[], timeSpent: number) {
+  try {
+    return await api.post(`/play/sessions/${sessionId}/submit`, { answers, timeSpent });
+  } catch (error) {
+    console.error("Erreur submitDynamicQuiz:", error);
+    return null;
+  }
+}

@@ -1,4 +1,4 @@
-import { db, poolConnection } from '../config/database';
+import { db, poolConnection } from '../config/database.js';
 import { migrate } from 'drizzle-orm/mysql2/migrator';
 import path from 'path';
 import { fileURLToPath } from 'url';

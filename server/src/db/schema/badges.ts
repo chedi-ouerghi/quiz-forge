@@ -1,5 +1,5 @@
 import { mysqlTable, varchar, int, text, timestamp, primaryKey } from 'drizzle-orm/mysql-core';
-import { users } from './users';
+import { users } from './users.js';
 
 export const badges = mysqlTable('badges', {
     id: varchar('id', { length: 36 }).primaryKey(),

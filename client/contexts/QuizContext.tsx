@@ -10,6 +10,10 @@ interface QuizResult {
   xpEarned: number;
   correctCount: number;
   timeBonus: number;
+  isDynamic?: boolean;
+  rating?: number;
+  ratingChange?: number;
+  streak?: number;
 }
 
 interface QuizContextType {

@@ -5,3 +5,7 @@ export * from './comments.js';
 export * from './results.js';
 export * from './badges.js';
 export * from './notifications.js';
+export * from './quiz_sessions.js';
+export * from './daily_challenges.js';
+export * from './user_stats.js';
+export * from './weekly_leaderboard.js';

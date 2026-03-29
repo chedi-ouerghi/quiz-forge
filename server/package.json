@@ -10,6 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "db:refill": "tsx src/db/refill.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio"
   },
@@ -23,6 +24,7 @@
     "express-rate-limit": "^8.3.1",
     "express-session": "^1.19.0",
     "express-validator": "^7.3.1",
+    "groq-sdk": "^1.1.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
