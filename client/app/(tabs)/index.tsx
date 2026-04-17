@@ -1,16 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Animated,
-  Dimensions,
-  RefreshControl,
-  Platform,
-  LayoutAnimation,
-  UIManager,
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    Pressable,
+    Animated, RefreshControl,
+    Platform,
+    LayoutAnimation,
+    UIManager,
+    ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -32,19 +31,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DIFFICULTY_TABS: Difficulty[] = ['beginner', 'intermediate', 'advanced', 'expert'];
 
 // Animation constants
 const ANIMATION_DURATION = 300;
-
-// Helper functions
-const getLevelColor = (level: number): string => {
-  if (level <= 10) return '#10B981';
-  if (level <= 25) return '#3B82F6';
-  if (level <= 50) return '#8B5CF6';
-  return '#F59E0B';
-};
 
 const formatTimeAgo = (date: Date): string => {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -70,10 +60,25 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  
+  // Initialize with user's current level
+  const initialDifficulty = useMemo(() => {
+    if (!user) return 'beginner';
+    const levelName = getNextLevelXp(user.xp).levelName.toLowerCase() as Difficulty;
+    return levelName;
+  }, [user]);
+
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('beginner');
+
+  // Update selectedDifficulty when initialDifficulty is calculated
+  useEffect(() => {
+    setSelectedDifficulty(initialDifficulty);
+  }, [initialDifficulty]);
+
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -137,23 +142,30 @@ export default function HomeScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, scaleAnim, headerTranslateY, statsScaleAnim]);
 
-  const loadQuizzes = useCallback(async () => {
-    setLoading(true);
-    const data = await getAllQuizzes();
-    setQuizzes(data);
-    setLoading(false);
+  const loadQuizzes = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await getAllQuizzes();
+      setQuizzes(data);
+    } catch (error: any) {
+      setLoadError(error?.message || 'Impossible de charger les quiz');
+      setQuizzes([]);
+    } finally {
+      if (!isRefresh) setLoading(false);
+    }
   }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadQuizzes();
+    await loadQuizzes(true);
     setRefreshing(false);
   }, [loadQuizzes]);
 
   useEffect(() => {
-    loadQuizzes();
+    loadQuizzes(false);
   }, [loadQuizzes]);
 
   const handleDifficultyChange = useCallback((difficulty: Difficulty) => {
@@ -181,7 +193,7 @@ export default function HomeScreen() {
     if (quiz.order <= 1) return false;
 
     // To unlock quiz order N, user must have completed quiz order N-1 with 60%+ score
-    const prevQuiz = quizzes.find(q => q.order === quiz.order - 1);
+    const prevQuiz = quizzes.find((q) => q.difficulty === quiz.difficulty && q.order === quiz.order - 1);
     if (!prevQuiz) return false;
 
     const isPrevDone = user?.quizHistory && user.quizHistory.some(h => 
@@ -418,13 +430,26 @@ export default function HomeScreen() {
           })}
         </ScrollView>
 
-        {/* Quiz List with empty state */}
-        {filteredQuizzes.length === 0 && !loading ? (
+        {/* Quiz List with loading/error/empty states */}
+        {loading ? (
+          <GlassCard style={styles.emptyState}>
+            <ActivityIndicator color={Colors.primaryLight} />
+            <Text style={styles.emptyStateTitle}>Chargement des quiz...</Text>
+            <Text style={styles.emptyStateText}>Préparation des contenus pour ton niveau.</Text>
+          </GlassCard>
+        ) : loadError ? (
+          <GlassCard style={styles.emptyState}>
+            <MaterialIcons name="error-outline" size={42} color={Colors.error} />
+            <Text style={styles.emptyStateTitle}>Erreur de chargement</Text>
+            <Text style={styles.emptyStateText}>{loadError}</Text>
+            <NeonButton title="Réessayer" onPress={() => loadQuizzes(false)} size="md" />
+          </GlassCard>
+        ) : filteredQuizzes.length === 0 ? (
           <GlassCard style={styles.emptyState}>
             <MaterialIcons name="quiz" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyStateTitle}>No quizzes available</Text>
+            <Text style={styles.emptyStateTitle}>Aucun quiz disponible</Text>
             <Text style={styles.emptyStateText}>
-              More quizzes coming soon! Check back later.
+              Aucun quiz trouvé pour cette difficulté pour le moment.
             </Text>
           </GlassCard>
         ) : (

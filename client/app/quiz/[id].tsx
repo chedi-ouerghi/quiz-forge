@@ -1,12 +1,12 @@
 // 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Animated,
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    Pressable,
+    Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -15,8 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuiz } from '@/hooks/useQuiz';
 import { getQuizById, calculateScore, submitQuizApi } from '@/services/quizService';
-import { calculateLevel } from '@/services/authService';
-import { MOCK_COMMENTS, Quiz } from '@/constants/quizData';
+import { Quiz } from '@/constants/quizData';
 import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { NeonButton } from '@/components/ui/NeonButton';
@@ -37,15 +36,24 @@ export default function QuizScreen() {
 
   const [quiz, setQuiz] = useState<Quiz | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchQuiz = async () => {
       setLoading(true);
-      if (id) {
-        const data = await getQuizById(Array.isArray(id) ? id[0] : id);
-        setQuiz(data);
+      setLoadError(null);
+      hasSubmittedRef.current = false;
+      try {
+        if (id) {
+          const data = await getQuizById(Array.isArray(id) ? id[0] : id);
+          setQuiz(data);
+        }
+      } catch (error: any) {
+        setQuiz(undefined);
+        setLoadError(error?.message || 'Impossible de charger ce quiz');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchQuiz();
   }, [id]);
@@ -58,6 +66,7 @@ export default function QuizScreen() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [totalTimeBonus, setTotalTimeBonus] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasSubmittedRef = useRef(false);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -68,8 +77,25 @@ export default function QuizScreen() {
     setSelectedAnswer(-1);
     setShowFeedback(true);
 
-    setTimeout(() => nextQuestion(), 1800);
-  }, [showFeedback]);
+    setTimeout(() => {
+      fadeAnim.setValue(0);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      setShowFeedback(false);
+      setSelectedAnswer(null);
+      setTimeLeft(QUESTION_TIME);
+
+      if (!quiz || currentQuestion + 1 >= quiz.questions.length) {
+        setPhase('finished');
+      } else {
+        setCurrentQuestion((prev) => prev + 1);
+      }
+    }, 1800);
+  }, [showFeedback, fadeAnim, quiz, currentQuestion]);
 
   useEffect(() => {
     if (phase !== 'playing' || showFeedback) return;
@@ -86,7 +112,7 @@ export default function QuizScreen() {
     }, 1000);
 
     return () => clearInterval(timerRef.current!);
-  }, [phase, currentQuestion, showFeedback]);
+  }, [phase, currentQuestion, showFeedback, handleTimeUp]);
 
   const nextQuestion = useCallback(() => {
     fadeAnim.setValue(0);
@@ -133,6 +159,8 @@ export default function QuizScreen() {
 
   useEffect(() => {
     if (phase === 'finished' && user && quiz) {
+      if (hasSubmittedRef.current) return;
+      hasSubmittedRef.current = true;
       (async () => {
         const allAnswers = [...answers];
         const result = calculateScore(allAnswers, quiz, totalTimeBonus);
@@ -155,12 +183,12 @@ export default function QuizScreen() {
         router.replace('/quiz/results');
       })();
     }
-  }, [phase]);
+  }, [phase, user, quiz, answers, totalTimeBonus, refreshUser, setQuizResult, router]);
 
   if (loading) {
     return (
       <View style={styles.screen}>
-        <Text style={{ color: Colors.text, textAlign: 'center', marginTop: 100 }}>Loading...</Text>
+        <Text style={{ color: Colors.text, textAlign: 'center', marginTop: 100 }}>Chargement...</Text>
       </View>
     );
   }
@@ -168,7 +196,12 @@ export default function QuizScreen() {
   if (!quiz) {
     return (
       <View style={styles.screen}>
-        <Text style={{ color: Colors.text, textAlign: 'center', marginTop: 100 }}>Quiz not found</Text>
+        <Text style={{ color: Colors.error, textAlign: 'center', marginTop: 100 }}>
+          {loadError || 'Quiz introuvable'}
+        </Text>
+        <View style={{ marginTop: 16, paddingHorizontal: 24 }}>
+          <NeonButton title="Retour" onPress={() => router.back()} fullWidth />
+        </View>
       </View>
     );
   }
@@ -291,7 +324,7 @@ export default function QuizScreen() {
               {currentQuestion + 1} / {quiz.questions.length}
             </Text>
             <ProgressBar
-              progress={(currentQuestion) / quiz.questions.length}
+              progress={(currentQuestion + 1) / quiz.questions.length}
               height={4}
               colors={['#7C3AED', '#2563EB']}
             />

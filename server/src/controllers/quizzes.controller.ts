@@ -33,6 +33,8 @@ export const createQuiz = async (req: Request, res: Response, next: NextFunction
         const questionsToInsert = quizQuestions.map((q: any, index: number) => ({
           id: crypto.randomUUID(),
           quizId,
+          category,
+          difficulty,
           question: q.question,
           options: q.options,
           correctIndex: q.correctIndex,
@@ -57,21 +59,30 @@ export const createQuiz = async (req: Request, res: Response, next: NextFunction
 // @access  Public
 export const getQuizzes = async (req: Request, res: Response) => {
   try {
-    // Basic pagination (page, limit) implementation possible
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const offset = (page - 1) * limit;
-
     const allQuizzes = await db.query.quizzes.findMany({
-      limit,
-      offset,
       with: {
         questions: true
-      },
-      orderBy: [desc(quizzes.createdAt)]
+      }
     });
 
-    res.json(allQuizzes);
+    const difficultyRank: Record<string, number> = {
+      beginner: 1,
+      intermediate: 2,
+      advanced: 3,
+      expert: 4,
+    };
+
+    const sortedQuizzes = [...allQuizzes].sort((a, b) => {
+      const diffCompare = (difficultyRank[a.difficulty] || 99) - (difficultyRank[b.difficulty] || 99);
+      if (diffCompare !== 0) return diffCompare;
+
+      const orderCompare = (a.order || 1) - (b.order || 1);
+      if (orderCompare !== 0) return orderCompare;
+
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
+    res.json(sortedQuizzes);
   } catch (error: any) {
     res.status(500).json({ message: 'Erreur lors de la récupération des quiz' });
   }
@@ -136,6 +147,40 @@ export const submitQuiz = async (req: Request, res: Response) => {
     });
 
     if (!quiz) return res.status(404).json({ message: 'Quiz non trouvé' });
+    if (!quiz.questions.length) return res.status(400).json({ message: 'Quiz invalide: aucune question' });
+
+    const currentUser = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!currentUser) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    const difficultyXpThresholds: Record<string, number> = {
+      beginner: 0,
+      intermediate: 200,
+      advanced: 600,
+      expert: 1200,
+    };
+
+    const requiredXp = difficultyXpThresholds[quiz.difficulty] ?? 0;
+    if ((currentUser.xp || 0) < requiredXp) {
+      return res.status(403).json({ message: 'Niveau insuffisant pour ce quiz' });
+    }
+
+    if (quiz.order > 1) {
+      const previousQuiz = await db.query.quizzes.findFirst({
+        where: and(eq(quizzes.difficulty, quiz.difficulty), eq(quizzes.order, quiz.order - 1))
+      });
+
+      if (previousQuiz) {
+        const previousSuccess = await db.query.quizResults.findFirst({
+          where: and(eq(quizResults.quizId, previousQuiz.id), eq(quizResults.userId, userId)),
+          orderBy: [desc(quizResults.score)]
+        });
+
+        const hasUnlocked = !!previousSuccess && previousSuccess.score >= 60;
+        if (!hasUnlocked) {
+          return res.status(403).json({ message: 'Terminez le quiz précédent avec au moins 60% pour débloquer celui-ci' });
+        }
+      }
+    }
 
     let score = 0;
     let correctAnswersCount = 0;
@@ -206,20 +251,19 @@ export const submitQuiz = async (req: Request, res: Response) => {
 
     // Mise à jour de l'utilisateur (seulement si de l'XP a été gagné ou une nouvelle complétion)
     if (xpEarned > 0 || isNewCompletion) {
-      const currentUser = await db.query.users.findFirst({ where: eq(users.id, userId) });
-      if (currentUser) {
-        const newXp = currentUser.xp + xpEarned;
-        const newLevel = newXp >= 390 ? 'expert' 
-                       : newXp >= 180 ? 'advanced' 
-                       : newXp >= 60 ? 'intermediate' 
-                       : 'beginner';
+      const newXp = currentUser.xp + xpEarned;
+      
+      // Nouveaux seuils cohérents
+      const newLevel = newXp >= 1200 ? 'expert' 
+                     : newXp >= 600 ? 'advanced' 
+                     : newXp >= 200 ? 'intermediate' 
+                     : 'beginner';
 
-        await db.update(users).set({
-          xp: newXp,
-          level: newLevel,
-          quizzesCompleted: currentUser.quizzesCompleted + (isNewCompletion ? 1 : 0)
-        }).where(eq(users.id, userId));
-      }
+      await db.update(users).set({
+        xp: newXp,
+        level: newLevel,
+        quizzesCompleted: currentUser.quizzesCompleted + (isNewCompletion ? 1 : 0)
+      }).where(eq(users.id, userId));
     }
 
     res.json({

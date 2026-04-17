@@ -1,32 +1,64 @@
 import { api } from './api';
 import { Quiz, DIFFICULTY_CONFIG } from '@/constants/quizData';
 
+interface DynamicQuizResponse {
+  success: boolean;
+  sessionId: string;
+  difficulty: Quiz['difficulty'];
+  questions: Quiz['questions'];
+}
+
+interface DynamicSubmitResponse {
+  success: boolean;
+  score: number;
+  correctCount: number;
+  total: number;
+  percentage: string;
+  newRating: number;
+  ratingChange: number;
+  streak: number;
+  xpGained: number;
+}
+
+function normalizeQuiz(raw: any): Quiz {
+  return {
+    id: String(raw?.id ?? ''),
+    title: String(raw?.title ?? 'Quiz'),
+    description: String(raw?.description ?? ''),
+    category: String(raw?.category ?? 'General'),
+    difficulty: (raw?.difficulty ?? 'beginner') as Quiz['difficulty'],
+    icon: String(raw?.icon ?? 'quiz'),
+    color: String(raw?.color ?? '#7C3AED'),
+    xpReward: Number(raw?.xpReward ?? 0),
+    order: Number(raw?.order ?? 1),
+    questions: Array.isArray(raw?.questions) ? raw.questions : [],
+  };
+}
+
 export async function getAllQuizzes(): Promise<Quiz[]> {
-  try {
-    return await api.get('/quizzes');
-  } catch (error) {
-    console.error("Erreur getAllQuizzes:", error);
-    return [];
+  const data = await api.get<any[]>('/quizzes');
+  if (!Array.isArray(data)) {
+    throw new Error('Format invalide: liste de quiz attendue');
   }
+
+  return data
+    .map(normalizeQuiz)
+    .filter((q) => q.id)
+    .sort((a, b) => {
+      if (a.difficulty === b.difficulty) return a.order - b.order;
+      return a.difficulty.localeCompare(b.difficulty);
+    });
 }
 
 export async function getQuizById(id: string): Promise<Quiz | undefined> {
-  try {
-    return await api.get(`/quizzes/${id}`);
-  } catch (error) {
-    console.error("Erreur getQuizById:", error);
-    return undefined;
-  }
+  const data = await api.get<any>(`/quizzes/${id}`);
+  if (!data?.id) return undefined;
+  return normalizeQuiz(data);
 }
 
 export async function getQuizzesByDifficulty(difficulty: string): Promise<Quiz[]> {
-  try {
-    const quizzes = await getAllQuizzes();
-    return quizzes.filter((q) => q.difficulty === difficulty);
-  } catch (error) {
-    console.error("Erreur getQuizzesByDifficulty:", error);
-    return [];
-  }
+  const quizzes = await getAllQuizzes();
+  return quizzes.filter((q) => q.difficulty === difficulty);
 }
 
 export function calculateScore(
@@ -54,23 +86,17 @@ export function calculateScore(
 }
 
 export async function submitQuizApi(quizId: string, answers: { questionId: string, selectedOption: number }[], timeSpent: number) {
-  return await api.post(`/quizzes/${quizId}/submit`, { answers, timeSpent });
+  return api.post(`/quizzes/${quizId}/submit`, { answers, timeSpent });
 }
 
-export async function generateDynamicQuiz(category?: string) {
-  try {
-    return await api.post('/play/generate', { category });
-  } catch (error) {
-    console.error("Erreur generateDynamicQuiz:", error);
-    return null;
-  }
+export async function generateDynamicQuiz(category?: string): Promise<DynamicQuizResponse> {
+  return api.post<DynamicQuizResponse>('/play/generate', { category });
 }
 
-export async function submitDynamicQuiz(sessionId: string, answers: { questionId: string | number, selectedOption: number }[], timeSpent: number) {
-  try {
-    return await api.post(`/play/sessions/${sessionId}/submit`, { answers, timeSpent });
-  } catch (error) {
-    console.error("Erreur submitDynamicQuiz:", error);
-    return null;
-  }
+export async function submitDynamicQuiz(
+  sessionId: string,
+  answers: { questionId: string | number, selectedOption: number }[],
+  timeSpent: number
+): Promise<DynamicSubmitResponse> {
+  return api.post<DynamicSubmitResponse>(`/play/sessions/${sessionId}/submit`, { answers, timeSpent });
 }

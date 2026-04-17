@@ -96,15 +96,15 @@ export async function updateUser(updatedUser: Partial<User>): Promise<User> {
 }
 
 export function calculateLevel(xp: number): number {
-  if (xp >= 3500) return 4;
-  if (xp >= 1500) return 3;
-  if (xp >= 500) return 2;
+  if (xp >= 1200) return 4;
+  if (xp >= 600) return 3;
+  if (xp >= 200) return 2;
   return 1;
 }
 
 export function getNextLevelXp(xp: number): { current: number; next: number; levelName: string } {
-  if (xp >= 3500) return { current: 3500, next: 9999, levelName: 'Expert' };
-  if (xp >= 1500) return { current: 1500, next: 3500, levelName: 'Advanced' };
-  if (xp >= 500) return { current: 500, next: 1500, levelName: 'Intermediate' };
-  return { current: 0, next: 500, levelName: 'Beginner' };
+  if (xp >= 1200) return { current: 1200, next: 9999, levelName: 'Expert' };
+  if (xp >= 600) return { current: 600, next: 1200, levelName: 'Advanced' };
+  if (xp >= 200) return { current: 200, next: 600, levelName: 'Intermediate' };
+  return { current: 0, next: 200, levelName: 'Beginner' };
 }

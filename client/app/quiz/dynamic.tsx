@@ -1,12 +1,12 @@
 // 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Animated,
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    Pressable,
+    Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -15,7 +15,6 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuiz } from '@/hooks/useQuiz';
 import { generateDynamicQuiz, submitDynamicQuiz } from '@/services/quizService';
-import { calculateLevel } from '@/services/authService';
 import { Quiz } from '@/constants/quizData';
 import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -38,26 +37,43 @@ export default function DynamicQuizScreen() {
   const [quiz, setQuiz] = useState<Quiz | undefined>(undefined);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasSubmittedRef = useRef(false);
 
   useEffect(() => {
     const fetchQuiz = async () => {
       setLoading(true);
-      const data = await generateDynamicQuiz(category) as any;
-      if (data) {
+      setLoadError(null);
+      hasSubmittedRef.current = false;
+      try {
+        const data = await generateDynamicQuiz(category);
+        if (!data?.questions?.length) {
+          throw new Error('Aucune question disponible pour ce challenge');
+        }
+
         setSessionId(data.sessionId);
         setQuiz({
           id: 'dynamic',
-          title: 'Quick Challenge',
-          description: 'A selection of 10 IT questions from our library.',
+          title: category ? `Challenge ${category}` : 'Défi Rapide',
+          description: category
+            ? `Une sélection de 10 questions sur le thème ${category}.`
+            : 'Un mélange de 10 questions de notre bibliothèque.',
           difficulty: data.difficulty,
           category: category || 'General',
           icon: 'psychology',
           color: '#7C3AED',
           xpReward: 100,
-          questions: data.questions
+          questions: data.questions,
         } as Quiz);
+      } catch (error: any) {
+        setQuiz(undefined);
+        setSessionId(null);
+        setLoadError(error?.message || 'Impossible de générer le quiz dynamique');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchQuiz();
   }, [category]);
@@ -80,8 +96,25 @@ export default function DynamicQuizScreen() {
     setSelectedAnswer(-1);
     setShowFeedback(true);
 
-    setTimeout(() => nextQuestion(), 1800);
-  }, [showFeedback]);
+    setTimeout(() => {
+      fadeAnim.setValue(0);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      setShowFeedback(false);
+      setSelectedAnswer(null);
+      setTimeLeft(QUESTION_TIME);
+
+      if (!quiz || currentQuestion + 1 >= quiz.questions.length) {
+        setPhase('finished');
+      } else {
+        setCurrentQuestion((prev) => prev + 1);
+      }
+    }, 1800);
+  }, [showFeedback, fadeAnim, quiz, currentQuestion]);
 
   useEffect(() => {
     if (phase !== 'playing' || showFeedback) return;
@@ -98,7 +131,7 @@ export default function DynamicQuizScreen() {
     }, 1000);
 
     return () => clearInterval(timerRef.current!);
-  }, [phase, currentQuestion, showFeedback]);
+  }, [phase, currentQuestion, showFeedback, handleTimeUp]);
 
   const nextQuestion = useCallback(() => {
     fadeAnim.setValue(0);
@@ -128,16 +161,30 @@ export default function DynamicQuizScreen() {
     const timeSpent = QUESTION_TIME - timeLeft;
     setTotalTimeSpent(prev => prev + timeSpent);
 
+    const isCorrect = index === quiz!.questions[currentQuestion].correctIndex;
+    const bonus = isCorrect ? Math.round(timeLeft * 0.5) : 0;
+
+    setTotalTimeBonus((prev) => prev + bonus);
     setSelectedAnswer(index);
     setShowFeedback(true);
     setAnswers((prev) => [...prev, index]);
 
-    // No correctIndex in dynamic quizzes, so no shakeAnim
-    setTimeout(() => nextQuestion(), 800);
+    if (!isCorrect) {
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 80, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 80, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 8, duration: 80, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 80, useNativeDriver: true }),
+      ]).start();
+    }
+
+    setTimeout(() => nextQuestion(), 2000);
   };
 
   useEffect(() => {
     if (phase === 'finished' && user && quiz && sessionId) {
+      if (hasSubmittedRef.current) return;
+      hasSubmittedRef.current = true;
       (async () => {
         const allAnswers = [...answers];
         const mappedAnswers = quiz.questions.map((q: any, index: number) => ({
@@ -147,35 +194,35 @@ export default function DynamicQuizScreen() {
         })).filter((a: any) => a.selectedOption !== undefined && a.selectedOption !== -1);
 
         try {
-           const res = await submitDynamicQuiz(sessionId, mappedAnswers, totalTimeSpent * 1000 || 30000) as any;
+           setIsSubmitting(true);
+           setSubmitError(null);
+           const res = await submitDynamicQuiz(sessionId, mappedAnswers, totalTimeSpent || 30) as any;
            if (refreshUser) {
              await refreshUser();
            }
-           
-           if (res) {
-             setQuizResult({
-               quiz,
-               answers: allAnswers,
-               score: res.score,
-               maxScore: 100,
-               xpEarned: res.ratingChange > 0 ? res.ratingChange : 0,
-               correctCount: res.correctCount,
-               timeBonus: 0,
-               isDynamic: true,
-               rating: res.newRating,
-               ratingChange: res.ratingChange,
-               streak: res.streak
-             });
-             router.replace('/quiz/results');
-           } else {
-             console.error("No valid response from submitDynamicQuiz");
-           }
-        } catch (e) {
-           console.log("Submit error", e);
+
+           setQuizResult({
+             quiz,
+             answers: allAnswers,
+             score: res.score,
+             maxScore: 100,
+             xpEarned: res.xpGained || (res.ratingChange > 0 ? res.ratingChange : 0),
+             correctCount: res.correctCount,
+             timeBonus: totalTimeBonus,
+             isDynamic: true,
+             rating: res.newRating,
+             ratingChange: res.ratingChange,
+             streak: res.streak
+           });
+           router.replace('/quiz/results');
+        } catch (e: any) {
+           setSubmitError(e?.message || 'Erreur lors de la soumission du quiz');
+        } finally {
+           setIsSubmitting(false);
         }
       })();
     }
-  }, [phase]);
+  }, [phase, user, quiz, sessionId, answers, totalTimeSpent, totalTimeBonus, refreshUser, router, setQuizResult]);
 
   if (loading) {
     return (
@@ -188,7 +235,32 @@ export default function DynamicQuizScreen() {
   if (!quiz) {
     return (
       <View style={styles.screen}>
-        <Text style={{ color: Colors.text, textAlign: 'center', marginTop: 100 }}>Quiz not found</Text>
+        <Text style={{ color: Colors.error, textAlign: 'center', marginTop: 100 }}>
+          {loadError || 'Quiz introuvable'}
+        </Text>
+        <View style={{ marginTop: 16, paddingHorizontal: 24 }}>
+          <NeonButton title="Réessayer" onPress={() => router.replace({ pathname: '/quiz/dynamic', params: { category } })} fullWidth />
+        </View>
+      </View>
+    );
+  }
+
+  if (phase === 'finished') {
+    return (
+      <View style={styles.screen}>
+        <LinearGradient colors={['#0D0821', '#080818']} style={StyleSheet.absoluteFill} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 12 }}>
+          <MaterialIcons name={submitError ? 'error-outline' : 'sync'} size={30} color={submitError ? Colors.error : Colors.primaryLight} />
+          <Text style={{ color: Colors.text, textAlign: 'center', fontSize: FontSize.md }}>
+            {submitError ? 'Soumission échouée' : isSubmitting ? 'Soumission en cours...' : 'Finalisation...'}
+          </Text>
+          {submitError && (
+            <>
+              <Text style={{ color: Colors.textMuted, textAlign: 'center' }}>{submitError}</Text>
+              <NeonButton title="Retour à l'accueil" onPress={() => router.replace('/(tabs)')} />
+            </>
+          )}
+        </View>
       </View>
     );
   }
@@ -215,7 +287,7 @@ export default function DynamicQuizScreen() {
             >
               <MaterialIcons name="arrow-back" size={22} color={Colors.text} />
             </Pressable>
-            <Text style={styles.headerTitle}>Quiz Details</Text>
+            <Text style={styles.headerTitle}>Détails du Quiz</Text>
             <View style={{ width: 40 }} />
           </View>
 
@@ -234,7 +306,7 @@ export default function DynamicQuizScreen() {
             <View style={styles.quizMeta}>
               {[
                 { icon: 'quiz', value: `${quiz.questions.length} Q`, label: 'Questions' },
-                { icon: 'timer', value: '30s', label: 'Per Question' },
+                { icon: 'timer', value: '30s', label: 'Par Question' },
                 { icon: 'bolt', value: `+${quiz.xpReward}`, label: 'Max XP' },
               ].map((m) => (
                 <View key={m.label} style={styles.metaItem}>
@@ -248,12 +320,12 @@ export default function DynamicQuizScreen() {
 
           {/* Rules */}
           <GlassCard>
-            <Text style={styles.rulesTitle}>How to Play</Text>
+            <Text style={styles.rulesTitle}>Comment jouer</Text>
             {[
-              { icon: 'timer', text: 'You have 30 seconds per question.' },
-              { icon: 'speed', text: 'Answer faster to earn time bonuses.' },
-              { icon: 'check-circle', text: 'Choose the correct option from 4 choices.' },
-              { icon: 'bolt', text: `Earn up to ${quiz.xpReward} XP on completion.` },
+              { icon: 'timer', text: 'Vous avez 30 secondes par question.' },
+              { icon: 'speed', text: 'Répondez vite pour des bonus de temps.' },
+              { icon: 'check-circle', text: 'Choisissez la bonne réponse parmi 4 choix.' },
+              { icon: 'bolt', text: `Gagnez de l'XP et améliorez votre classement.` },
             ].map((rule, i) => (
               <View key={i} style={styles.ruleItem}>
                 <MaterialIcons name={rule.icon as any} size={16} color={Colors.primaryLight} />
@@ -262,7 +334,7 @@ export default function DynamicQuizScreen() {
             ))}
           </GlassCard>
 
-          <NeonButton title="Start Quiz" onPress={() => setPhase('playing')} fullWidth size="lg" />
+          <NeonButton title="Commencer" onPress={() => setPhase('playing')} fullWidth size="lg" />
 
           {/* Comments */}
           <CommentSection
@@ -276,17 +348,25 @@ export default function DynamicQuizScreen() {
 
   // Playing Phase
   const getOptionStyle = (index: number) => {
-    if (index === selectedAnswer && showFeedback) {
-      return [styles.option, { borderColor: Colors.primary, backgroundColor: 'rgba(124,58,237,0.2)' }];
-    }
-    return styles.option;
+    if (!showFeedback) return styles.option;
+    
+    const isCorrect = index === question.correctIndex;
+    const isSelected = index === selectedAnswer;
+
+    if (isCorrect) return [styles.option, styles.optionCorrect];
+    if (isSelected && !isCorrect) return [styles.option, styles.optionWrong];
+    return [styles.option, styles.optionDimmed];
   };
 
   const getOptionTextStyle = (index: number) => {
-    if (index === selectedAnswer && showFeedback) {
-      return [styles.optionText, { color: Colors.primaryLight }];
-    }
-    return styles.optionText;
+    if (!showFeedback) return styles.optionText;
+    
+    const isCorrect = index === question.correctIndex;
+    const isSelected = index === selectedAnswer;
+
+    if (isCorrect) return [styles.optionText, styles.optionTextCorrect];
+    if (isSelected && !isCorrect) return [styles.optionText, styles.optionTextWrong];
+    return [styles.optionText, styles.optionTextDimmed];
   };
 
   return (
@@ -307,7 +387,7 @@ export default function DynamicQuizScreen() {
               {currentQuestion + 1} / {quiz.questions.length}
             </Text>
             <ProgressBar
-              progress={(currentQuestion) / quiz.questions.length}
+              progress={(currentQuestion + 1) / quiz.questions.length}
               height={4}
               colors={['#7C3AED', '#2563EB']}
             />

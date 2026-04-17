@@ -26,7 +26,7 @@ async function refill() {
     
     await db.execute(sql`SET FOREIGN_KEY_CHECKS = 1`);
     
-    logger.info('🆕 Lancement de la génération IA (10 quiz / 100 questions)...');
+    logger.info('🆕 Lancement du seed catalogue quiz (qualité production)...');
     await ensureDefaultQuizzesExist();
     
     logger.info('🎉 Refill terminé avec succès !');
