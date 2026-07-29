@@ -1,7 +1,7 @@
 import { mysqlTable, varchar, int, boolean, timestamp, json } from 'drizzle-orm/mysql-core';
-import { users } from './users';
-import { quizzes } from './quizzes';
-import { questions } from './questions';
+import { users } from './users.js';
+import { quizzes } from './quizzes.js';
+import { questions } from './questions.js';
 
 export const quizResults = mysqlTable('quiz_results', {
   id: varchar('id', { length: 36 }).primaryKey(),

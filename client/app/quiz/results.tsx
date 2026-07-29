@@ -54,11 +54,11 @@ export default function ResultsScreen() {
   const accuracy = Math.round((correctCount / quiz.questions.length) * 100);
 
   const getGrade = () => {
-    if (accuracy >= 90) return { label: 'S', emoji: '🏆', color: '#FFD700', message: 'Outstanding!' };
-    if (accuracy >= 75) return { label: 'A', emoji: '⭐', color: '#10B981', message: 'Excellent!' };
-    if (accuracy >= 60) return { label: 'B', emoji: '👍', color: '#3B82F6', message: 'Good Job!' };
-    if (accuracy >= 40) return { label: 'C', emoji: '📚', color: '#F59E0B', message: 'Keep Practicing' };
-    return { label: 'D', emoji: '💪', color: '#EF4444', message: 'Keep Going!' };
+    if (accuracy >= 90) return { label: 'S', emoji: '🏆', color: '#FFD700', message: 'Incroyable !' };
+    if (accuracy >= 75) return { label: 'A', emoji: '⭐', color: '#10B981', message: 'Excellent !' };
+    if (accuracy >= 60) return { label: 'B', emoji: '👍', color: '#3B82F6', message: 'Bon travail !' };
+    if (accuracy >= 40) return { label: 'C', emoji: '📚', color: '#F59E0B', message: 'Continue de t\'entraîner' };
+    return { label: 'D', emoji: '💪', color: '#EF4444', message: 'Ne lâche rien !' };
   };
 
   const grade = getGrade();
@@ -102,7 +102,7 @@ export default function ResultsScreen() {
           <View style={styles.scoreTop}>
             <View style={styles.scoreLeft}>
               <Text style={styles.scoreValue}>{accuracy}%</Text>
-              <Text style={styles.scoreLabel}>Accuracy</Text>
+              <Text style={styles.scoreLabel}>Précision</Text>
             </View>
             <View style={styles.scoreDivider} />
             <View style={styles.scoreCenter}>
@@ -117,7 +117,7 @@ export default function ResultsScreen() {
                 <MaterialIcons name="bolt" size={18} color="#F59E0B" />
                 <Text style={[styles.scoreValue, { color: '#F59E0B' }]}>+{xpEarned}</Text>
               </View>
-              <Text style={styles.scoreLabel}>XP Earned</Text>
+              <Text style={styles.scoreLabel}>XP Gagné</Text>
             </View>
           </View>
 
@@ -131,11 +131,11 @@ export default function ResultsScreen() {
 
         {/* Stats breakdown */}
         <GlassCard>
-          <Text style={styles.breakdownTitle}>Score Breakdown</Text>
+          <Text style={styles.breakdownTitle}>Détail du Score</Text>
           {[
-            { label: 'Base Score', value: correctCount * 100, icon: 'check-circle', color: Colors.accentGreen },
-            { label: 'Time Bonus', value: timeBonus, icon: 'bolt', color: '#F59E0B' },
-            { label: 'Total Score', value: score, icon: 'star', color: Colors.primary, bold: true },
+            { label: 'Score de base', value: correctCount * 100, icon: 'check-circle', color: Colors.accentGreen },
+            { label: 'Bonus de temps', value: timeBonus, icon: 'bolt', color: '#F59E0B' },
+            { label: 'Score Total', value: score, icon: 'star', color: Colors.primary, bold: true },
           ].map((item) => (
             <View key={item.label} style={styles.breakdownRow}>
               <MaterialIcons name={item.icon as any} size={16} color={item.color} />
@@ -149,7 +149,7 @@ export default function ResultsScreen() {
 
         {/* Per-question review */}
         <View>
-          <Text style={styles.reviewTitle}>Question Review</Text>
+          <Text style={styles.reviewTitle}>Révision des Questions</Text>
           {quiz.questions.map((question, index) => {
             const isCorrect = answers[index] === question.correctIndex;
             const wasTimedOut = answers[index] === undefined || answers[index] === -1;
@@ -170,7 +170,7 @@ export default function ResultsScreen() {
                   </View>
                   <Text style={styles.reviewNumber}>Q{index + 1}</Text>
                   {wasTimedOut && !isCorrect && (
-                    <Badge label="Timed Out" color={Colors.error} size="sm" />
+                    <Badge label="Temps écoulé" color={Colors.error} size="sm" />
                   )}
                 </View>
                 <Text style={styles.reviewQuestion} numberOfLines={2}>{question.question}</Text>
@@ -190,16 +190,23 @@ export default function ResultsScreen() {
         {/* Actions */}
         <View style={styles.actions}>
           <NeonButton
-            title="Play Again"
+            title="Rejouer"
             onPress={() => {
+              const quizId = quiz.id;
+              const isDynamic = quiz.id === 'dynamic';
+              const category = quiz.category;
               setQuizResult(null);
-              router.replace(`/quiz/${quiz.id}`);
+              if (isDynamic) {
+                router.replace({ pathname: '/quiz/dynamic', params: { category } });
+              } else {
+                router.replace(`/quiz/${quizId}`);
+              }
             }}
             fullWidth
             size="lg"
           />
           <NeonButton
-            title="Back to Home"
+            title="Retour à l'accueil"
             onPress={() => {
               setQuizResult(null);
               router.replace('/(tabs)');

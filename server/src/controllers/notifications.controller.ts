@@ -9,7 +9,7 @@ import logger from '../utils/logger.js';
  */
 export const getMyNotifications = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const userNotifications = await db.select()
       .from(notifications)
       .where(eq(notifications.userId, userId))
@@ -27,7 +27,7 @@ export const getMyNotifications = async (req: Request, res: Response, next: Next
 export const markAsRead = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     await db.update(notifications)
       .set({ isRead: true })
@@ -44,7 +44,7 @@ export const markAsRead = async (req: Request, res: Response, next: NextFunction
 
 export const markAllAsRead = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     await db.update(notifications)
       .set({ isRead: true })

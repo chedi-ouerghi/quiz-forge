@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuiz } from '@/hooks/useQuiz';
-import { getQuizById, calculateScore, submitQuizApi } from '@/services/quizService';
+import { generateDynamicQuiz, submitDynamicQuiz } from '@/services/quizService';
 import { Quiz } from '@/constants/quizData';
 import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -27,16 +27,20 @@ const QUESTION_TIME = 30;
 
 type GamePhase = 'info' | 'playing' | 'finished';
 
-export default function QuizScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export default function DynamicQuizScreen() {
+  const { category } = useLocalSearchParams<{ category: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, refreshUser } = useAuth();
   const { setQuizResult } = useQuiz();
 
   const [quiz, setQuiz] = useState<Quiz | undefined>(undefined);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasSubmittedRef = useRef(false);
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -44,19 +48,35 @@ export default function QuizScreen() {
       setLoadError(null);
       hasSubmittedRef.current = false;
       try {
-        if (id) {
-          const data = await getQuizById(Array.isArray(id) ? id[0] : id);
-          setQuiz(data);
+        const data = await generateDynamicQuiz(category);
+        if (!data?.questions?.length) {
+          throw new Error('Aucune question disponible pour ce challenge');
         }
+
+        setSessionId(data.sessionId);
+        setQuiz({
+          id: 'dynamic',
+          title: category ? `Challenge ${category}` : 'Défi Rapide',
+          description: category
+            ? `Une sélection de 10 questions sur le thème ${category}.`
+            : 'Un mélange de 10 questions de notre bibliothèque.',
+          difficulty: data.difficulty,
+          category: category || 'General',
+          icon: 'psychology',
+          color: '#7C3AED',
+          xpReward: 100,
+          questions: data.questions,
+        } as Quiz);
       } catch (error: any) {
         setQuiz(undefined);
-        setLoadError(error?.message || 'Impossible de charger ce quiz');
+        setSessionId(null);
+        setLoadError(error?.message || 'Impossible de générer le quiz dynamique');
       } finally {
         setLoading(false);
       }
     };
     fetchQuiz();
-  }, [id]);
+  }, [category]);
 
   const [phase, setPhase] = useState<GamePhase>('info');
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -66,7 +86,6 @@ export default function QuizScreen() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [totalTimeBonus, setTotalTimeBonus] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasSubmittedRef = useRef(false);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -133,9 +152,14 @@ export default function QuizScreen() {
     }
   }, [currentQuestion, quiz, fadeAnim]);
 
+  const [totalTimeSpent, setTotalTimeSpent] = useState(0);
+
   const handleSelectAnswer = (index: number) => {
     if (showFeedback || selectedAnswer !== null) return;
     clearInterval(timerRef.current!);
+
+    const timeSpent = QUESTION_TIME - timeLeft;
+    setTotalTimeSpent(prev => prev + timeSpent);
 
     const isCorrect = index === quiz!.questions[currentQuestion].correctIndex;
     const bonus = isCorrect ? Math.round(timeLeft * 0.5) : 0;
@@ -158,37 +182,52 @@ export default function QuizScreen() {
   };
 
   useEffect(() => {
-    if (phase === 'finished' && user && quiz) {
+    if (phase === 'finished' && user && quiz && sessionId) {
       if (hasSubmittedRef.current) return;
       hasSubmittedRef.current = true;
       (async () => {
         const allAnswers = [...answers];
-        const result = calculateScore(allAnswers, quiz, totalTimeBonus);
-
         const mappedAnswers = quiz.questions.map((q: any, index: number) => ({
           questionId: q.id,
-          selectedOption: allAnswers[index]
+          selectedOption: allAnswers[index],
+          questionIndex: index
         })).filter((a: any) => a.selectedOption !== undefined && a.selectedOption !== -1);
 
         try {
-           await submitQuizApi(quiz.id, mappedAnswers, 30);
+           setIsSubmitting(true);
+           setSubmitError(null);
+           const res = await submitDynamicQuiz(sessionId, mappedAnswers, totalTimeSpent || 30) as any;
            if (refreshUser) {
              await refreshUser();
            }
-        } catch (e) {
-           console.log("Submit error", e);
-        }
 
-        setQuizResult({ quiz, answers: allAnswers, ...result, timeBonus: totalTimeBonus });
-        router.replace('/quiz/results');
+           setQuizResult({
+             quiz,
+             answers: allAnswers,
+             score: res.score,
+             maxScore: 100,
+             xpEarned: res.xpGained || (res.ratingChange > 0 ? res.ratingChange : 0),
+             correctCount: res.correctCount,
+             timeBonus: totalTimeBonus,
+             isDynamic: true,
+             rating: res.newRating,
+             ratingChange: res.ratingChange,
+             streak: res.streak
+           });
+           router.replace('/quiz/results');
+        } catch (e: any) {
+           setSubmitError(e?.message || 'Erreur lors de la soumission du quiz');
+        } finally {
+           setIsSubmitting(false);
+        }
       })();
     }
-  }, [phase, user, quiz, answers, totalTimeBonus, refreshUser, setQuizResult, router]);
+  }, [phase, user, quiz, sessionId, answers, totalTimeSpent, totalTimeBonus, refreshUser, router, setQuizResult]);
 
   if (loading) {
     return (
       <View style={styles.screen}>
-        <Text style={{ color: Colors.text, textAlign: 'center', marginTop: 100 }}>Chargement...</Text>
+        <Text style={{ color: Colors.text, textAlign: 'center', marginTop: 100 }}>Loading...</Text>
       </View>
     );
   }
@@ -200,7 +239,27 @@ export default function QuizScreen() {
           {loadError || 'Quiz introuvable'}
         </Text>
         <View style={{ marginTop: 16, paddingHorizontal: 24 }}>
-          <NeonButton title="Retour" onPress={() => router.back()} fullWidth />
+          <NeonButton title="Réessayer" onPress={() => router.replace({ pathname: '/quiz/dynamic', params: { category } })} fullWidth />
+        </View>
+      </View>
+    );
+  }
+
+  if (phase === 'finished') {
+    return (
+      <View style={styles.screen}>
+        <LinearGradient colors={['#0D0821', '#080818']} style={StyleSheet.absoluteFill} />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 12 }}>
+          <MaterialIcons name={submitError ? 'error-outline' : 'sync'} size={30} color={submitError ? Colors.error : Colors.primaryLight} />
+          <Text style={{ color: Colors.text, textAlign: 'center', fontSize: FontSize.md }}>
+            {submitError ? 'Soumission échouée' : isSubmitting ? 'Soumission en cours...' : 'Finalisation...'}
+          </Text>
+          {submitError && (
+            <>
+              <Text style={{ color: Colors.textMuted, textAlign: 'center' }}>{submitError}</Text>
+              <NeonButton title="Retour à l'accueil" onPress={() => router.replace('/(tabs)')} />
+            </>
+          )}
         </View>
       </View>
     );
@@ -228,7 +287,7 @@ export default function QuizScreen() {
             >
               <MaterialIcons name="arrow-back" size={22} color={Colors.text} />
             </Pressable>
-            <Text style={styles.headerTitle}>Quiz Details</Text>
+            <Text style={styles.headerTitle}>Détails du Quiz</Text>
             <View style={{ width: 40 }} />
           </View>
 
@@ -247,7 +306,7 @@ export default function QuizScreen() {
             <View style={styles.quizMeta}>
               {[
                 { icon: 'quiz', value: `${quiz.questions.length} Q`, label: 'Questions' },
-                { icon: 'timer', value: '30s', label: 'Per Question' },
+                { icon: 'timer', value: '30s', label: 'Par Question' },
                 { icon: 'bolt', value: `+${quiz.xpReward}`, label: 'Max XP' },
               ].map((m) => (
                 <View key={m.label} style={styles.metaItem}>
@@ -261,12 +320,12 @@ export default function QuizScreen() {
 
           {/* Rules */}
           <GlassCard>
-            <Text style={styles.rulesTitle}>How to Play</Text>
+            <Text style={styles.rulesTitle}>Comment jouer</Text>
             {[
-              { icon: 'timer', text: 'You have 30 seconds per question.' },
-              { icon: 'speed', text: 'Answer faster to earn time bonuses.' },
-              { icon: 'check-circle', text: 'Choose the correct option from 4 choices.' },
-              { icon: 'bolt', text: `Earn up to ${quiz.xpReward} XP on completion.` },
+              { icon: 'timer', text: 'Vous avez 30 secondes par question.' },
+              { icon: 'speed', text: 'Répondez vite pour des bonus de temps.' },
+              { icon: 'check-circle', text: 'Choisissez la bonne réponse parmi 4 choix.' },
+              { icon: 'bolt', text: `Gagnez de l'XP et améliorez votre classement.` },
             ].map((rule, i) => (
               <View key={i} style={styles.ruleItem}>
                 <MaterialIcons name={rule.icon as any} size={16} color={Colors.primaryLight} />
@@ -275,7 +334,7 @@ export default function QuizScreen() {
             ))}
           </GlassCard>
 
-          <NeonButton title="Start Quiz" onPress={() => setPhase('playing')} fullWidth size="lg" />
+          <NeonButton title="Commencer" onPress={() => setPhase('playing')} fullWidth size="lg" />
 
           {/* Comments */}
           <CommentSection
@@ -290,19 +349,23 @@ export default function QuizScreen() {
   // Playing Phase
   const getOptionStyle = (index: number) => {
     if (!showFeedback) return styles.option;
-    if (index === quiz.questions[currentQuestion].correctIndex) return [styles.option, styles.optionCorrect];
-    if (index === selectedAnswer && selectedAnswer !== quiz.questions[currentQuestion].correctIndex) {
-      return [styles.option, styles.optionWrong];
-    }
+    
+    const isCorrect = index === question.correctIndex;
+    const isSelected = index === selectedAnswer;
+
+    if (isCorrect) return [styles.option, styles.optionCorrect];
+    if (isSelected && !isCorrect) return [styles.option, styles.optionWrong];
     return [styles.option, styles.optionDimmed];
   };
 
   const getOptionTextStyle = (index: number) => {
     if (!showFeedback) return styles.optionText;
-    if (index === quiz.questions[currentQuestion].correctIndex) return [styles.optionText, styles.optionTextCorrect];
-    if (index === selectedAnswer && selectedAnswer !== quiz.questions[currentQuestion].correctIndex) {
-      return [styles.optionText, styles.optionTextWrong];
-    }
+    
+    const isCorrect = index === question.correctIndex;
+    const isSelected = index === selectedAnswer;
+
+    if (isCorrect) return [styles.optionText, styles.optionTextCorrect];
+    if (isSelected && !isCorrect) return [styles.optionText, styles.optionTextWrong];
     return [styles.optionText, styles.optionTextDimmed];
   };
 
@@ -377,42 +440,9 @@ export default function QuizScreen() {
                   </Text>
                 </View>
                 <Text style={getOptionTextStyle(index)}>{option}</Text>
-                {showFeedback && index === question.correctIndex && (
-                  <MaterialIcons name="check-circle" size={20} color={Colors.accentGreen} style={{ marginLeft: 'auto' }} />
-                )}
-                {showFeedback && index === selectedAnswer && index !== question.correctIndex && (
-                  <MaterialIcons name="cancel" size={20} color={Colors.error} style={{ marginLeft: 'auto' }} />
-                )}
               </Pressable>
             ))}
           </View>
-
-          {/* Explanation */}
-          {showFeedback && (
-            <GlassCard
-              style={[
-                styles.explanationCard,
-                selectedAnswer === question.correctIndex ? styles.explanationCorrect : styles.explanationWrong,
-              ]}
-            >
-              <View style={styles.explanationHeader}>
-                <MaterialIcons
-                  name={selectedAnswer === question.correctIndex ? 'check-circle' : 'info'}
-                  size={18}
-                  color={selectedAnswer === question.correctIndex ? Colors.accentGreen : Colors.error}
-                />
-                <Text
-                  style={[
-                    styles.explanationTitle,
-                    { color: selectedAnswer === question.correctIndex ? Colors.accentGreen : Colors.error },
-                  ]}
-                >
-                  {selectedAnswer === question.correctIndex ? 'Correct!' : selectedAnswer === -1 ? 'Time\'s up!' : 'Incorrect'}
-                </Text>
-              </View>
-              <Text style={styles.explanationText}>{question.explanation}</Text>
-            </GlassCard>
-          )}
         </ScrollView>
       </View>
     </View>

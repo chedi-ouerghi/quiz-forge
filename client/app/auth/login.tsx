@@ -1,4 +1,3 @@
-// 
 import { useState } from 'react';
 import {
   View,
@@ -9,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -17,7 +17,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { useAlert } from '@/template';
 import { NeonButton } from '@/components/ui/NeonButton';
-import { Colors, BorderRadius, FontSize, FontWeight, Spacing } from '@/constants/theme';
+import { Colors, BorderRadius, FontSize, Spacing } from '@/constants/theme';
+
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -48,120 +50,152 @@ export default function LoginScreen() {
   return (
     <View style={styles.screen}>
       <LinearGradient
-        colors={['#0D0821', '#080818', '#050510']}
+        colors={['#0A0418', '#0D0821', '#060310']}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Purple orb */}
-      <View style={styles.orb1} />
-      <View style={styles.orb2} />
+      {/* Magical floating orbs */}
+      <View style={styles.orbPurple} />
+      <View style={styles.orbBlue} />
+      <View style={styles.orbPink} />
+      <View style={styles.orbIndigo} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+        style={styles.container}
       >
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: insets.top + 40,
+              paddingBottom: insets.bottom + 30
+            }
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Hero */}
-          <View style={styles.heroSection}>
-            <View style={styles.logoRing}>
+          {/* Professional Header */}
+          <View style={styles.headerSection}>
+            <View style={styles.brandContainer}>
               <LinearGradient
-                colors={['#7C3AED', '#2563EB']}
-                style={styles.logoGradient}
+                colors={['#7C3AED', '#2563EB', '#7C3AED']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.logoWrapper}
               >
-                <MaterialIcons name="psychology" size={36} color="white" />
+                <View style={styles.logoInner}>
+                  <Text style={styles.logoText}>Q</Text>
+                </View>
               </LinearGradient>
+              <Text style={styles.brandName}>QuizForge</Text>
             </View>
-            <Text style={styles.appName}>QuizForge</Text>
-            <Text style={styles.tagline}>Level up your knowledge</Text>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.subtitleText}>Continue your learning adventure</Text>
           </View>
 
-          {/* Form */}
-          <View style={styles.form}>
-            <Text style={styles.formTitle}>Welcome Back</Text>
-            <Text style={styles.formSubtitle}>Sign in to continue your journey</Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="email" size={18} color={Colors.textSubtle} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="your@email.com"
-                  placeholderTextColor={Colors.textSubtle}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="lock" size={18} color={Colors.textSubtle} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  placeholder="Your password"
-                  placeholderTextColor={Colors.textSubtle}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                />
-                <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                  <MaterialIcons
-                    name={showPassword ? 'visibility' : 'visibility-off'}
-                    size={18}
-                    color={Colors.textSubtle}
-                  />
-                </Pressable>
-              </View>
-            </View>
-
-            <NeonButton
-              title="Sign In"
-              onPress={handleLogin}
-              loading={loading}
-              fullWidth
-              size="lg"
-              style={{ marginTop: Spacing.sm }}
-            />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <Pressable
-              onPress={() => router.push('/auth/register')}
-              style={({ pressed }) => [styles.registerBtn, pressed && { opacity: 0.7 }]}
+          {/* Main Form Card */}
+          <View style={styles.formCard}>
+            <LinearGradient
+              colors={['rgba(124,58,237,0.08)', 'rgba(37,99,235,0.04)']}
+              style={styles.formGradient}
             >
-              <Text style={styles.registerText}>
-                No account yet?{' '}
-                <Text style={styles.registerLink}>Create one</Text>
-              </Text>
-            </Pressable>
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputHeader}>
+                  <MaterialIcons name="alternate-email" size={16} color={Colors.primaryLight} />
+                  <Text style={styles.inputLabel}>Email Address</Text>
+                </View>
+                <View style={styles.inputField}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your email"
+                    placeholderTextColor={Colors.textSubtle}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputHeader}>
+                  <MaterialIcons name="lock-outline" size={16} color={Colors.primaryLight} />
+                  <Text style={styles.inputLabel}>Password</Text>
+                </View>
+                <View style={styles.inputField}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Enter your password"
+                    placeholderTextColor={Colors.textSubtle}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+                  <Pressable
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.visibilityToggle}
+                  >
+                    <MaterialIcons
+                      name={showPassword ? 'visibility-off' : 'visibility'}
+                      size={20}
+                      color={Colors.textSubtle}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+
+              <Pressable
+                
+                style={styles.forgotPasswordLink}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </Pressable>
+
+              <NeonButton
+                title="Sign In "
+                onPress={handleLogin}
+                loading={loading}
+                fullWidth
+                size="lg"
+                style={styles.signInButton}
+              />
+
+              <View style={styles.dividerContainer}>
+                <View style={styles.divider} />
+                <Text style={styles.dividerText}>New to QuizForge?</Text>
+                <View style={styles.divider} />
+              </View>
+
+              <Pressable
+                onPress={() => router.push('/auth/register')}
+                style={({ pressed }) => [
+                  styles.createAccountButton,
+                  pressed && styles.buttonPressed
+                ]}
+              >
+                <Text style={styles.createAccountText}>Create Free Account</Text>
+                <MaterialIcons name="arrow-forward" size={18} color={Colors.primaryLight} />
+              </Pressable>
+            </LinearGradient>
           </View>
 
-          {/* Stats */}
-          <View style={styles.statsRow}>
-            {[
-              { value: '10K+', label: 'Players' },
-              { value: '500+', label: 'Questions' },
-              { value: '4', label: 'Levels' },
-            ].map((stat) => (
-              <View key={stat.label} style={styles.statItem}>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
+          {/* Footer Info */}
+          <View style={styles.footer}>
+            <View style={styles.featurePill}>
+              <MaterialIcons name="security" size={14} color={Colors.success} />
+              <Text style={styles.featureText}>Secure Login</Text>
+            </View>
+            <View style={styles.featurePill}>
+              <MaterialIcons name="bolt" size={14} color={Colors.warning} />
+              <Text style={styles.featureText}>Instant Access</Text>
+            </View>
+            <View style={styles.featurePill}>
+              <MaterialIcons name="verified" size={14} color={Colors.primaryLight} />
+              <Text style={styles.featureText}>Verified Platform</Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -174,151 +208,256 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bg,
   },
-  orb1: {
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: Spacing.xl,
+  },
+
+  // Magical Orbs
+  orbPurple: {
     position: 'absolute',
     top: -100,
     right: -80,
+    width: 350,
+    height: 350,
+    borderRadius: 175,
+    backgroundColor: 'rgba(124,58,237,0.08)',
+    transform: [{ scale: 1.2 }],
+  },
+  orbBlue: {
+    position: 'absolute',
+    bottom: -50,
+    left: -100,
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: 'rgba(124,58,237,0.15)',
+    backgroundColor: 'rgba(37,99,235,0.06)',
   },
-  orb2: {
+  orbPink: {
     position: 'absolute',
-    bottom: 100,
-    left: -100,
+    top: '30%',
+    left: -60,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(236,72,153,0.04)',
+  },
+  orbIndigo: {
+    position: 'absolute',
+    bottom: '20%',
+    right: -50,
     width: 250,
     height: 250,
     borderRadius: 125,
-    backgroundColor: 'rgba(37,99,235,0.1)',
+    backgroundColor: 'rgba(79,70,229,0.05)',
   },
-  scroll: {
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.xl,
-  },
-  heroSection: {
+
+  // Header Section
+  headerSection: {
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingTop: Spacing.lg,
+    marginBottom: Spacing.xxl,
   },
-  logoRing: {
-    padding: 4,
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.4)',
-  },
-  logoGradient: {
-    width: 64,
-    height: 64,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  appName: {
-    fontSize: FontSize.xxxl,
-    color: Colors.text,
-    fontWeight: FontWeight.extrabold,
-    letterSpacing: 1,
-  },
-  tagline: {
-    fontSize: FontSize.base,
-    color: Colors.textSubtle,
-    letterSpacing: 0.5,
-  },
-  form: {
-    backgroundColor: Colors.glass,
-    borderWidth: 1,
-    borderColor: Colors.glassBorder,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.xl,
-    gap: Spacing.md,
-  },
-  formTitle: {
-    fontSize: FontSize.xxl,
-    color: Colors.text,
-    fontWeight: FontWeight.bold,
-  },
-  formSubtitle: {
-    fontSize: FontSize.base,
-    color: Colors.textSubtle,
-    marginTop: -Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-  inputGroup: {
-    gap: Spacing.xs,
-  },
-  label: {
-    fontSize: FontSize.sm,
-    color: Colors.textMuted,
-    fontWeight: FontWeight.medium,
-    letterSpacing: 0.3,
-  },
-  inputContainer: {
+  brandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: BorderRadius.lg,
-    height: 52,
-    paddingHorizontal: Spacing.md,
+    gap: Spacing.md,
+    marginBottom: Spacing.xl,
   },
-  inputIcon: {
-    marginRight: Spacing.sm,
+  logoWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    padding: 2,
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  logoInner: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0A0418',
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.3)',
+  },
+  logoText: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textShadowColor: '#7C3AED',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  brandName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.text,
+    letterSpacing: 1,
+  },
+  welcomeText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: Spacing.xs,
+    textAlign: 'center',
+  },
+  subtitleText: {
+    fontSize: FontSize.base,
+    color: Colors.textSubtle,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+
+  // Form Card
+  formCard: {
+    // borderRadius: BorderRadius.xxxl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.1,
+    shadowRadius: 30,
+    elevation: 15,
+  },
+  formGradient: {
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+  },
+
+  // Input Fields
+  inputWrapper: {
+    gap: Spacing.xs,
+  },
+  inputHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  inputLabel: {
+    fontSize: FontSize.sm,
+    color: Colors.textMuted,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  inputField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10,4,24,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.2)',
+    borderRadius: BorderRadius.xl,
+    height: 56,
+    paddingHorizontal: Spacing.lg,
   },
   input: {
     flex: 1,
     color: Colors.text,
     fontSize: FontSize.base,
+    fontWeight: '500',
   },
-  eyeBtn: {
+  passwordInput: {
+    paddingRight: Spacing.xl,
+  },
+  visibilityToggle: {
+    position: 'absolute',
+    right: Spacing.lg,
     padding: Spacing.xs,
-    hitSlop: { top: 8, bottom: 8, left: 8, right: 8 },
   },
-  divider: {
+
+  // Forgot Password
+  forgotPasswordLink: {
+    alignSelf: 'flex-end',
+    paddingVertical: Spacing.xs,
+  },
+  forgotPasswordText: {
+    fontSize: FontSize.sm,
+    color: Colors.primaryLight,
+    fontWeight: '600',
+  },
+
+  // Sign In Button
+  signInButton: {
+    marginTop: Spacing.md,
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+
+  // Divider
+  dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    marginVertical: Spacing.xs,
+    marginVertical: Spacing.md,
   },
-  dividerLine: {
+  divider: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.glassBorder,
+    backgroundColor: 'rgba(124,58,237,0.2)',
   },
   dividerText: {
     fontSize: FontSize.sm,
-    color: Colors.textSubtle,
-  },
-  registerBtn: {
-    alignItems: 'center',
-    paddingVertical: Spacing.xs,
-  },
-  registerText: {
-    fontSize: FontSize.base,
     color: Colors.textMuted,
+    fontWeight: '500',
   },
-  registerLink: {
+
+  // Create Account Button
+  createAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.3)',
+    backgroundColor: 'rgba(124,58,237,0.05)',
+  },
+  createAccountText: {
+    fontSize: FontSize.base,
     color: Colors.primaryLight,
-    fontWeight: FontWeight.semibold,
+    fontWeight: '600',
   },
-  statsRow: {
+  buttonPressed: {
+    opacity: 0.7,
+    backgroundColor: 'rgba(124,58,237,0.1)',
+  },
+
+  // Footer
+  footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: Spacing.xxl,
-    paddingBottom: Spacing.md,
+    gap: Spacing.md,
+    marginTop: Spacing.xl,
+    flexWrap: 'wrap',
   },
-  statItem: {
+  featurePill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  statValue: {
-    fontSize: FontSize.xl,
-    color: Colors.text,
-    fontWeight: FontWeight.bold,
-  },
-  statLabel: {
-    fontSize: FontSize.sm,
+  featureText: {
+    fontSize: FontSize.xs,
     color: Colors.textSubtle,
+    fontWeight: '500',
   },
 });

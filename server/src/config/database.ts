@@ -10,8 +10,11 @@ dotenv.config();
 export const poolConnection = mysql.createPool({
     uri: process.env.DATABASE_URL,
     waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+    connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
+    maxIdle: Number(process.env.DB_MAX_IDLE || 10),
+    idleTimeout: Number(process.env.DB_IDLE_TIMEOUT_MS || 60000),
+    queueLimit: Number(process.env.DB_QUEUE_LIMIT || 0),
+    connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 10000),
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
 });

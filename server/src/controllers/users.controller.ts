@@ -9,7 +9,7 @@ import { quizResults } from '../db/schema/results.js';
 // @access  Private
 export const getProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     const userProfile = await db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -42,7 +42,7 @@ export const getProfile = async (req: Request, res: Response) => {
 // @access  Private
 export const updateProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const { username, avatar, country } = req.body;
 
     const user = await db.query.users.findFirst({ where: eq(users.id, userId) });

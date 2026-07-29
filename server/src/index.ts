@@ -16,6 +16,10 @@ async function startServer() {
       process.exit(1);
     }
 
+    // Initialisation automatique des quiz par défaut si nécessaire
+    const { ensureDefaultQuizzesExist } = await import('./services/quizPopulator.js');
+    await ensureDefaultQuizzesExist();
+
     const server = app.listen(PORT, () => {
       logger.info(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
     });

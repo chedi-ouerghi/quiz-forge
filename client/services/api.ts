@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { clearSession, getAccessToken, getRefreshToken, setSessionTokens } from './sessionStorage';
 
 /**
  * Configure dynamic API URL based on platform and environment
@@ -15,19 +15,75 @@ const getBaseUrl = () => {
 };
 
 export const API_URL = getBaseUrl();
-const TOKEN_KEY = '@quiz_token';
 
 interface RequestOptions extends RequestInit {
   data?: any;
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+const parseResponse = async (response: Response) => {
+  const contentType = response.headers.get('content-type');
+
+  if (contentType && contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  return { message: await response.text() };
+};
+
+const shouldRetryWithRefresh = (endpoint: string, options: RequestOptions, hasRetried: boolean) => {
+  if (hasRetried) return false;
+  if ((options.method || 'GET').toUpperCase() === 'OPTIONS') return false;
+
+  return !endpoint.includes('/auth/login')
+    && !endpoint.includes('/auth/register')
+    && !endpoint.includes('/auth/refresh')
+    && !endpoint.includes('/auth/logout');
+};
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = await getRefreshToken();
+
+      if (!refreshToken) {
+        await clearSession();
+        return null;
+      }
+
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      const data: any = await parseResponse(response);
+
+      if (!response.ok || !data?.accessToken) {
+        await clearSession();
+        return null;
+      }
+
+      await setSessionTokens(data.accessToken, data.refreshToken || refreshToken);
+      return data.accessToken as string;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
 }
 
 /**
  * Robust API Client Wrapper
  */
 export const api = {
-  async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
-    
+  async request<T>(endpoint: string, options: RequestOptions = {}, hasRetried = false): Promise<T> {
+    const token = await getAccessToken();
     const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
     
     const headers = {
@@ -48,21 +104,30 @@ export const api = {
 
     try {
       const response = await fetch(url, config);
-      
-      // Handle non-JSON responses
-      const contentType = response.headers.get('content-type');
-      let data;
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
-      } else {
-        data = { message: await response.text() };
+
+      if (response.status === 401 && shouldRetryWithRefresh(endpoint, options, hasRetried)) {
+        const nextAccessToken = await refreshAccessToken();
+
+        if (nextAccessToken) {
+          return this.request<T>(
+            endpoint,
+            {
+              ...options,
+              headers: {
+                ...(options.headers || {}),
+                Authorization: `Bearer ${nextAccessToken}`,
+              },
+            },
+            true,
+          );
+        }
       }
 
+      const data = await parseResponse(response);
+
       if (!response.ok) {
-        // Handle specific error codes
         if (response.status === 401) {
-          // Optional: Handle logout on unauthorized
-          console.warn('API Unauthorized! Token might be expired.');
+          console.warn('API Unauthorized! Session is no longer valid.');
         }
         
         const error = new Error(data.message || `API Error ${response.status}`);

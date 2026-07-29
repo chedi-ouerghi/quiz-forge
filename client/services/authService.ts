@@ -1,5 +1,13 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api, API_URL } from './api';
+import { api } from './api';
+import {
+  clearSession,
+  getAccessToken,
+  getCachedCurrentUser,
+  getRefreshToken,
+  setAccessToken,
+  setCachedCurrentUser,
+  setRefreshToken,
+} from './sessionStorage';
 
 export interface User {
   id: string;
@@ -16,47 +24,64 @@ export interface User {
   lastProfileUpdate?: string;
 }
 
-const CURRENT_USER_KEY = '@quiz_current_user';
-const TOKEN_KEY = '@quiz_token';
-
 export async function getToken() {
-  return await AsyncStorage.getItem(TOKEN_KEY);
+  return await getAccessToken();
 }
 
 export async function setToken(token: string) {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
+  await setAccessToken(token);
+}
+
+export async function setRefreshSessionToken(token: string) {
+  await setRefreshToken(token);
 }
 
 export async function removeToken() {
-  await AsyncStorage.removeItem(TOKEN_KEY);
+  await clearSession();
 }
 
 export async function register(username: string, email: string, password: string): Promise<User> {
   const data: any = await api.post('/auth/register', { username, email, password });
+  const { accessToken, refreshToken, token, success, ...userPayload } = data;
   
-  await setToken(data.token);
-  const user = { ...data, joinedAt: data.createdAt || new Date().toISOString(), quizHistory: [] };
-  await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  await setToken(accessToken || token);
+  if (refreshToken) {
+    await setRefreshSessionToken(refreshToken);
+  }
+  const user = { ...userPayload, joinedAt: userPayload.createdAt || new Date().toISOString(), quizHistory: [] };
+  await setCachedCurrentUser(user);
   return user as User;
 }
 
 export async function login(email: string, password: string): Promise<User> {
   const data: any = await api.post('/auth/login', { email, password });
+  const { accessToken, refreshToken, token, success, ...userPayload } = data;
   
-  await setToken(data.token);
-  const user = { ...data, joinedAt: data.createdAt || new Date().toISOString(), quizHistory: [] };
-  await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  await setToken(accessToken || token);
+  if (refreshToken) {
+    await setRefreshSessionToken(refreshToken);
+  }
+  const user = { ...userPayload, joinedAt: userPayload.createdAt || new Date().toISOString(), quizHistory: [] };
+  await setCachedCurrentUser(user);
   return user as User;
 }
 
 export async function logout(): Promise<void> {
-  await removeToken();
-  await AsyncStorage.removeItem(CURRENT_USER_KEY);
+  try {
+    const refreshToken = await getRefreshToken();
+    if (refreshToken) {
+      await api.post('/auth/logout', { refreshToken });
+    }
+  } catch {
+    // La session locale doit quand même être nettoyée même si le serveur est indisponible
+  } finally {
+    await clearSession();
+  }
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  const token = await getToken();
-  if (!token) return null;
+  const [accessToken, refreshToken] = await Promise.all([getToken(), getRefreshToken()]);
+  if (!accessToken && !refreshToken) return null;
   
   try {
     const profile: any = await api.get('/users/profile');
@@ -64,7 +89,7 @@ export async function getCurrentUser(): Promise<User | null> {
     let quizzes: any[] = [];
     try {
        quizzes = await api.get('/quizzes');
-    } catch(e) {}
+    } catch {}
 
     const quizHistory = (profile.results || []).map((r: any) => {
       const q = quizzes.find((x) => x.id === r.quizId);
@@ -80,31 +105,35 @@ export async function getCurrentUser(): Promise<User | null> {
     });
 
     const user = { ...profile, joinedAt: profile.createdAt || new Date().toISOString(), quizHistory };
-    await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+    await setCachedCurrentUser(user);
     return user as User;
-  } catch (err) {
-    const data = await AsyncStorage.getItem(CURRENT_USER_KEY);
-    return data ? JSON.parse(data) : null;
+  } catch (err: any) {
+    if (err?.status === 401) {
+      await clearSession();
+      return null;
+    }
+
+    return getCachedCurrentUser<User>();
   }
 }
 
 export async function updateUser(updatedUser: Partial<User>): Promise<User> {
   const data = await api.put('/users/profile', updatedUser);
   const user = { ...(data as any), quizHistory: [] } as User;
-  await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  await setCachedCurrentUser(user);
   return user;
 }
 
 export function calculateLevel(xp: number): number {
-  if (xp >= 3500) return 4;
-  if (xp >= 1500) return 3;
-  if (xp >= 500) return 2;
+  if (xp >= 1200) return 4;
+  if (xp >= 600) return 3;
+  if (xp >= 200) return 2;
   return 1;
 }
 
 export function getNextLevelXp(xp: number): { current: number; next: number; levelName: string } {
-  if (xp >= 3500) return { current: 3500, next: 9999, levelName: 'Expert' };
-  if (xp >= 1500) return { current: 1500, next: 3500, levelName: 'Advanced' };
-  if (xp >= 500) return { current: 500, next: 1500, levelName: 'Intermediate' };
-  return { current: 0, next: 500, levelName: 'Beginner' };
+  if (xp >= 1200) return { current: 1200, next: 9999, levelName: 'Expert' };
+  if (xp >= 600) return { current: 600, next: 1200, levelName: 'Advanced' };
+  if (xp >= 200) return { current: 200, next: 600, levelName: 'Intermediate' };
+  return { current: 0, next: 200, levelName: 'Beginner' };
 }
