@@ -50,7 +50,7 @@ function getAdaptiveDifficulty(stats: UserStats | null | undefined): Difficulty 
 
 export const generateQuiz = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const { category } = req.body;
 
     let stats = await db.query.userStats.findFirst({
@@ -172,7 +172,7 @@ export const generateQuiz = async (req: Request, res: Response, next: NextFuncti
 
 export const submitDynamicQuiz = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const { sessionId } = req.params;
     const { answers, timeSpent } = req.body;
 
@@ -326,7 +326,7 @@ export const submitDynamicQuiz = async (req: Request, res: Response, next: NextF
 
 export const getDailyChallenge = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const today = new Date().toISOString().split('T')[0];
 
     // Vérifier si le daily challenge a déjà été fait aujourd'hui

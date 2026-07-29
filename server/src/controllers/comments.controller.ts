@@ -10,7 +10,7 @@ import { NotificationService } from '../services/notification.service.js';
 // @access  Private
 export const addComment = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const { quizId, text, avatar, time, parentId } = req.body;
 
     if (!text || !quizId) {
@@ -23,7 +23,7 @@ export const addComment = async (req: Request, res: Response) => {
       quizId,
       userId,
       parentId, // Optionnel, pour les réponses
-      user: req.user.username,
+      user: req.user!.username,
       avatar: avatar || '👤',
       text,
       time: time || 'Just now'
@@ -35,7 +35,7 @@ export const addComment = async (req: Request, res: Response) => {
 
     // --- LOGIQUE DE NOTIFICATION ---
     // 1. Notifier les mentions (@username)
-    await NotificationService.notifyMentions(text, req.user.username, { quizId, commentId: id });
+    await NotificationService.notifyMentions(text, req.user!.username, { quizId, commentId: id });
 
     // 2. Notifier si c'est une réponse
     if (parentId) {
@@ -43,7 +43,7 @@ export const addComment = async (req: Request, res: Response) => {
         where: eq(comments.id, parentId)
       });
       if (parentComment && parentComment.userId) {
-        await NotificationService.notifyReply(parentComment.userId, req.user.username, { quizId, commentId: id });
+        await NotificationService.notifyReply(parentComment.userId, req.user!.username, { quizId, commentId: id });
       }
     }
 
@@ -77,7 +77,7 @@ export const updateComment = async (req: Request, res: Response) => {
   try {
     const { commentId } = req.params;
     const { text } = req.body;
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     const existing = await db.query.comments.findFirst({ where: eq(comments.id, commentId) });
     if (!existing) return res.status(404).json({ message: 'Non trouvé' });
@@ -97,7 +97,7 @@ export const updateComment = async (req: Request, res: Response) => {
 export const deleteComment = async (req: Request, res: Response) => {
   try {
     const { commentId } = req.params;
-    const userId = req.user.id;
+    const userId = req.user!.id;
 
     const existing = await db.query.comments.findFirst({ where: eq(comments.id, commentId) });
     if (!existing) return res.status(404).json({ message: 'Non trouvé' });

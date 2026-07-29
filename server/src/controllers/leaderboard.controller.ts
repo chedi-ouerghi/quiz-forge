@@ -35,7 +35,7 @@ export const getGlobalLeaderboard = async (req: Request, res: Response) => {
 // @access  Private
 export const getMyPosition = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     
     // Pour une solution basique sans window functions : 
     const allLeaderboardDesc = await db.query.users.findMany({

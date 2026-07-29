@@ -131,7 +131,7 @@ export const getQuizDetail = async (req: Request, res: Response) => {
 // @access  Private
 export const submitQuiz = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const quizId = req.params.quizId;
     const { answers, timeSpent } = req.body; // answers = [{ questionId: '...', selectedOption: 0 }]
 
@@ -283,7 +283,7 @@ export const submitQuiz = async (req: Request, res: Response) => {
 // @access  Private
 export const getQuizResults = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user!.id;
     const quizId = req.params.quizId;
 
     const result = await db.query.quizResults.findFirst({
